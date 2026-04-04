@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -346,15 +347,18 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func(), error) {
 }
 
 func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo int, line []byte) batchClassifyResult {
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
+
 	var input domain.CaseInput
-	if err := json.Unmarshal(line, &input); err != nil {
+	if err := decoder.Decode(&input); err != nil {
 		return batchClassifyResult{
 			LineNo: lineNo,
 			Status: "error",
 			Error: &batchErrorResult{
 				Code:      "INVALID_JSON",
-				Message:   fmt.Sprintf("%d 行目のJSONが不正です", lineNo),
-				MessageEN: fmt.Sprintf("invalid JSON at line %d", lineNo),
+				Message:   fmt.Sprintf("%d 行目のJSONが不正です: %v", lineNo, err),
+				MessageEN: fmt.Sprintf("invalid JSON at line %d: %v", lineNo, err),
 			},
 		}
 	}

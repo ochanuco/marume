@@ -135,7 +135,7 @@ func Test一致するルールがない場合は分類不能エラーを返す(t
 		MainDiagnosis: "I219",
 		Procedures:    []string{"OTHER"},
 	})
-	if err != evaluator.ErrNoClassification {
+	if !errors.Is(err, evaluator.ErrNoClassification) {
 		t.Fatalf("ErrNoClassification を期待しましたが、実際は %v でした", err)
 	}
 	if len(result.CandidateRules) != 1 {
