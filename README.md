@@ -32,6 +32,14 @@ uv venv --python 3.13
 uv sync
 ```
 
+最小の Python データパイプラインは以下の 3 段階です。
+
+```bash
+uv run python scripts/fetch_mhlw.py --output-dir .local/raw/mhlw
+uv run python scripts/transform_dpc.py --input .local/raw/mhlw/dpc-2026.html --output .local/intermediate/dpc-2026.json
+uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
+```
+
 ## 使い方
 
 ```bash
