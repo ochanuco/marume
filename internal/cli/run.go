@@ -452,6 +452,9 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 }
 
 func validateCaseInput(input domain.CaseInput) error {
+	// NOTE: POCでは evaluator が最低限必要とする項目だけをここで検証している。
+	// procedures/comorbidities の空配列や age/sex の未指定はルール次第で許容し、
+	// JSONのキー欠落と空値の厳密な区別は、将来 input DTO を分ける段階で扱う。
 	switch {
 	case input.CaseID == "":
 		return fmt.Errorf("%w: case_id は必須です", errInvalidInput)
