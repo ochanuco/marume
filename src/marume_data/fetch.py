@@ -55,6 +55,27 @@ def fetch_mhlw_dpc_assets(output_dir: Path, page_url: str, url_reader: URLReader
     return manifest
 
 
+def load_manifest(manifest_path: Path) -> dict[str, object]:
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def resolve_page_path(manifest_path: Path) -> Path:
+    manifest = load_manifest(manifest_path)
+    return manifest_path.parent / str(manifest["page_path"])
+
+
+def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
+    manifest = load_manifest(manifest_path)
+    for asset in manifest.get("assets", []):
+        path = str(asset.get("path", ""))
+        if path.endswith(".csv"):
+            return manifest_path.parent / path
+    default_path = manifest_path.parent / "dpc_rules.csv"
+    if default_path.exists():
+        return default_path
+    return None
+
+
 def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
     kind = _classify_link_kind(link.label)
     updated_suffix = (link.updated_at or "unknown").replace("-", "")
