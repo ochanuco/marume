@@ -98,7 +98,11 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return err
 	}
 
-	engine := evaluator.New(store.NewJSONRuleStore(*rulesPath))
+	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	engine := evaluator.New(ruleStore)
 	result, err := engine.Classify(ctx, input)
 	if err != nil {
 		return err
@@ -107,7 +111,7 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 	return writeJSON(stdout, result)
 }
 
-func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (retErr error) {
 	flags := flag.NewFlagSet("classify-batch", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
@@ -139,9 +143,16 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	if err != nil {
 		return err
 	}
-	defer cleanupOutput()
+	defer func() {
+		if closeErr := cleanupOutput(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("%w: バッチ結果のクローズに失敗しました: %v", errRuleRuntime, closeErr)
+		}
+	}()
 
-	ruleStore := store.NewJSONRuleStore(*rulesPath)
+	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
 	preloadedRuleSet, err := ruleStore.ReadRuleSet(ctx)
 	if err != nil {
 		return err
@@ -204,7 +215,11 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		return err
 	}
 
-	engine := evaluator.New(store.NewJSONRuleStore(*rulesPath))
+	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	engine := evaluator.New(ruleStore)
 	result, err := engine.Explain(ctx, input)
 	if err != nil {
 		if errors.Is(err, evaluator.ErrNoClassification) {
@@ -273,7 +288,12 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
 
-	ruleSet, err := store.NewJSONRuleStore(*rulesPath).ReadRuleSet(context.Background())
+	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+
+	ruleSet, err := ruleStore.ReadRuleSet(context.Background())
 	if err != nil {
 		return err
 	}
@@ -337,16 +357,16 @@ func openInput(path string, stdin io.Reader) (io.Reader, func(), error) {
 	return file, func() { _ = file.Close() }, nil
 }
 
-func openOutput(path string, stdout io.Writer) (io.Writer, func(), error) {
+func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) {
 	if path == "-" {
-		return stdout, func() {}, nil
+		return stdout, func() error { return nil }, nil
 	}
 
 	file, err := os.Create(path)
 	if err != nil {
 		return nil, nil, err
 	}
-	return file, func() { _ = file.Close() }, nil
+	return file, file.Close, nil
 }
 
 func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo int, line []byte) batchClassifyResult {

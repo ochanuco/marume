@@ -16,11 +16,11 @@ type JSONRuleStore struct {
 	path string
 }
 
-func NewJSONRuleStore(path string) *JSONRuleStore {
+func NewJSONRuleStore(path string) (*JSONRuleStore, error) {
 	if path == "" {
-		panic("jsonstore: path cannot be empty")
+		return nil, fmt.Errorf("jsonstore: path cannot be empty")
 	}
-	return &JSONRuleStore{path: path}
+	return &JSONRuleStore{path: path}, nil
 }
 
 // ReadRuleSet reads a single strict JSON rule file without fiscal-year validation.

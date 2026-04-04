@@ -130,6 +130,30 @@ func TestClassifyBatchは64KBを超える行も処理できる(t *testing.T) {
 	}
 }
 
+func TestRulesPathが空文字なら入力エラーを返す(t *testing.T) {
+	input := `{"case_id":"123","fiscal_year":2026,"main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}`
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify", "--input", "-", "--rules", ""},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("空の rules パスでは入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("空の rules パスの終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(err.Error(), "path cannot be empty") {
+		t.Fatalf("空の rules パスのエラーメッセージが想定と異なります: %v", err)
+	}
+}
+
 func testdataPath(t *testing.T, elems ...string) string {
 	t.Helper()
 
