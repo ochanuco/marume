@@ -6,6 +6,11 @@
 *.test
 coverage.out
 
+## Python
+.venv/
+.python-version
+__pycache__/
+
 ## macOS
 .DS_Store
 

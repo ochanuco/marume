@@ -25,6 +25,13 @@ mise install
 go build ./cmd/marume
 ```
 
+Python でデータ収集・整形を進める場合は、以下を使います。
+
+```bash
+uv venv --python 3.13
+uv sync
+```
+
 ## 使い方
 
 ```bash
@@ -84,3 +91,7 @@ go build ./cmd/marume
 2. `validate` を JSON Schema か独自ルールで強化
 3. Dataform / BigQuery 由来のスナップショット生成に接続する
 4. Cobra ベースのコマンド体系に移行
+
+## SQLite 化メモ
+
+- 基礎データの収集元と最小スキーマ案は `docs/sqlite-data-sourcing.md` を参照
