@@ -20,7 +20,7 @@ def test_正式版PDFからルールCSVの雛形を作れる(tmp_path) -> None:
     assert metadata["status"] == "scaffolded"
 
 
-def test_manifestから正式版PDFを選んでルールCSVの雛形を作れる(tmp_path) -> None:
+def test_manifestから正式版PDFを選んでルールCSVの雛形を作れる(tmp_path: Path) -> None:
     fixture_dir = Path(__file__).with_name("fixtures")
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text((fixture_dir / "manifest_with_pdfs.json").read_text(encoding="utf-8"), encoding="utf-8")
@@ -33,5 +33,7 @@ def test_manifestから正式版PDFを選んでルールCSVの雛形を作れる
     )
 
     assert output_csv_path == tmp_path / "dpc_rules.csv"
+    lines = output_csv_path.read_text(encoding="utf-8").splitlines()
+    assert lines == [",".join(RULES_CSV_HEADERS)]
     metadata = json.loads(output_csv_path.with_suffix(".source.json").read_text(encoding="utf-8"))
     assert metadata["source_pdf"].endswith("dpc_official_20260318.pdf")

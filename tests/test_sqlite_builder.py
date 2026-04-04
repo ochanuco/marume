@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import sqlite3
 
+from pathlib import Path
+
 from marume_data.models import ICDMasterRow, ProcedureMasterRow, Rule, RuleCondition, RuleSet, Snapshot
 from marume_data.sqlite_builder import create_snapshot_database
 
+_ALLOWED_TABLES = frozenset({"rule_sets", "rules", "rule_conditions", "icd_master", "procedure_master", "metadata"})
 
-def test_SQLiteスナップショットの最小テーブルを書き込める(tmp_path) -> None:
+
+def test_SQLiteスナップショットの最小テーブルを書き込める(tmp_path: Path) -> None:
     output_path = tmp_path / "rules-2026.sqlite"
     snapshot = Snapshot(
         rule_set=RuleSet(
@@ -70,8 +74,13 @@ def test_SQLiteスナップショットの最小テーブルを書き込める(t
 
 
 def _count_rows(connection: sqlite3.Connection, table_name: str) -> int:
+    if table_name not in _ALLOWED_TABLES:
+        raise ValueError(f"unknown table: {table_name}")
     return connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
 
 
 def _metadata_value(connection: sqlite3.Connection, key: str) -> str:
-    return connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()[0]
+    row = connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()
+    if row is None:
+        raise AssertionError(f"metadata key not found: {key}")
+    return row[0]

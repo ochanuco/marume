@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from marume_data.fetch import resolve_page_path, resolve_rules_csv_path
+
+DEFAULT_FISCAL_YEAR = int(os.getenv("MARUME_FISCAL_YEAR", "2026"))
+DEFAULT_SOURCE_URL = os.getenv("MARUME_SOURCE_URL", "https://www.mhlw.go.jp/stf/newpage_67729.html")
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,10 +26,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional CSV file that contains flattened DPC rules.",
     )
-    parser.add_argument("--fiscal-year", type=int, default=2026, help="Fiscal year to stamp in output.")
+    parser.add_argument("--fiscal-year", type=int, default=DEFAULT_FISCAL_YEAR, help="Fiscal year to stamp in output.")
     parser.add_argument(
         "--source-url",
-        default="https://www.mhlw.go.jp/stf/newpage_67729.html",
+        default=DEFAULT_SOURCE_URL,
         help="Source URL recorded in the snapshot.",
     )
     return parser.parse_args()

@@ -27,12 +27,16 @@ def main() -> int:
     manifest = fetch_mhlw_dpc_assets(
         output_dir=args.output_dir,
         page_url=args.url,
-        url_reader=urllib.request.urlopen,  # noqa: S310
+        url_reader=_url_reader_with_timeout,  # noqa: S310
     )
     print(args.output_dir / manifest["page_path"])
     for asset in manifest["assets"]:
         print(args.output_dir / asset["path"])
     return 0
+
+
+def _url_reader_with_timeout(url: str):
+    return urllib.request.urlopen(url, timeout=10)  # noqa: S310
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from marume_data.transform import (
 
 
 def test_厚労省ページからDPCリンクと更新日を抽出できる() -> None:
-    html = _fixture_path().read_text(encoding="utf-8")
+    html = _html_fixture_path().read_text(encoding="utf-8")
 
     metadata = parse_mhlw_dpc_page(
         html=html,
@@ -25,11 +25,11 @@ def test_厚労省ページからDPCリンクと更新日を抽出できる() ->
     assert metadata.dpc_links[0].url == "https://www.mhlw.go.jp/content/12404000/001234568.pdf"
 
 
-def test_厚労省ページからsnapshot_JSONを書き出せる(tmp_path) -> None:
+def test_厚労省ページからsnapshot_JSONを書き出せる(tmp_path: Path) -> None:
     output_path = tmp_path / "dpc-2026.json"
 
     write_snapshot_from_mhlw_html(
-        input_path=_fixture_path(),
+        input_path=_html_fixture_path(),
         output_path=output_path,
         fiscal_year=2026,
         source_url="https://www.mhlw.go.jp/stf/newpage_67729.html",
@@ -51,7 +51,7 @@ def test_DPCルールCSVからrulesとconditionsを組み立てられる() -> No
     assert rows[1].main_diagnosis == "K703"
 
 
-def test_厚労省ページとCSVからrules入りsnapshot_JSONを書き出せる(tmp_path) -> None:
+def test_厚労省ページとCSVからrules入りsnapshot_JSONを書き出せる(tmp_path: Path) -> None:
     output_path = tmp_path / "dpc-2026-rules.json"
     html = _html_fixture_path().read_text(encoding="utf-8")
     metadata = parse_mhlw_dpc_page(
@@ -72,11 +72,6 @@ def test_厚労省ページとCSVからrules入りsnapshot_JSONを書き出せ�
     assert payload["rule_set"]["rules"][0]["rule_id"] == "R-2026-0001"
     assert payload["rule_set"]["rules"][0]["conditions"][0]["condition_type"] == "main_diagnosis"
     assert payload["rule_set"]["rules"][0]["conditions"][1]["value_json"] == ["K549", "K546"]
-
-
-def _fixture_path():
-    return _html_fixture_path()
-
 
 def _html_fixture_path() -> Path:
     return Path(__file__).with_name("fixtures").joinpath("mhlw_dpc_page.html")

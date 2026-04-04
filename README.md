@@ -32,7 +32,7 @@ uv venv --python 3.13
 uv sync
 ```
 
-最小の Python データパイプラインは以下の 3 段階です。
+最小の Python データパイプラインは以下の 4 段階です。
 
 ```bash
 uv run python scripts/fetch_mhlw.py --output-dir .local/raw/mhlw

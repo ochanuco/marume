@@ -61,7 +61,10 @@ def load_manifest(manifest_path: Path) -> dict[str, object]:
 
 def resolve_page_path(manifest_path: Path) -> Path:
     manifest = load_manifest(manifest_path)
-    return manifest_path.parent / str(manifest["page_path"])
+    page_path = manifest.get("page_path")
+    if not page_path:
+        raise KeyError(f"page_path is missing in manifest: {manifest_path}")
+    return manifest_path.parent / str(page_path)
 
 
 def resolve_rules_csv_path(manifest_path: Path) -> Path | None:

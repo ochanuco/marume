@@ -3,7 +3,7 @@ name = "marume-data"
 version = "0.1.0"
 description = "Data ingestion and SQLite snapshot builders for marume"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.13"
 dependencies = []
 
 [build-system]

@@ -16,7 +16,7 @@ def test_manifestからtransformしてsqliteまで作れる(tmp_path) -> None:
         encoding="utf-8",
     )
     manifest = {
-        "page_url": "https://www.mhlw.go.jp/stf/newpage_67729.html",
+        "page_url": "https://example.com/test-page.html",
         "page_path": "mhlw_dpc_page.html",
         "source_title": "令和８年度診療報酬改定について｜厚生労働省",
         "assets": [],
