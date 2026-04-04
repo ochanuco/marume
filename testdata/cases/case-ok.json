@@ -1,0 +1,10 @@
+{
+  "case_id": "123",
+  "fiscal_year": 2026,
+  "age": 72,
+  "sex": "M",
+  "main_diagnosis": "I219",
+  "diagnoses": ["I219"],
+  "procedures": ["K549"],
+  "comorbidities": []
+}
