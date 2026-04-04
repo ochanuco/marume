@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
-from marume_data.fetch import resolve_page_path, resolve_rules_csv_path
-
-DEFAULT_FISCAL_YEAR = int(os.getenv("MARUME_FISCAL_YEAR", "2026"))
-DEFAULT_SOURCE_URL = os.getenv("MARUME_SOURCE_URL", "https://www.mhlw.go.jp/stf/newpage_67729.html")
+from marume_data.fetch import load_manifest, resolve_page_path, resolve_rules_csv_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,10 +22,10 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional CSV file that contains flattened DPC rules.",
     )
-    parser.add_argument("--fiscal-year", type=int, default=DEFAULT_FISCAL_YEAR, help="Fiscal year to stamp in output.")
+    parser.add_argument("--fiscal-year", type=int, required=True, help="Fiscal year to stamp in output.")
     parser.add_argument(
         "--source-url",
-        default=DEFAULT_SOURCE_URL,
+        default=None,
         help="Source URL recorded in the snapshot.",
     )
     return parser.parse_args()
@@ -41,15 +37,16 @@ def main() -> int:
 
     input_path = _resolve_input_path(args.input, args.manifest)
     rules_csv_path = args.rules_csv or _resolve_rules_csv(args.manifest)
+    source_url = _resolve_source_url(args.source_url, args.manifest)
     html = input_path.read_text(encoding="utf-8")
     metadata = parse_mhlw_dpc_page(
         html=html,
-        base_url=args.source_url,
+        base_url=source_url,
     )
     write_snapshot_from_sources(
         output_path=args.output,
         fiscal_year=args.fiscal_year,
-        source_url=args.source_url,
+        source_url=source_url,
         page_metadata=metadata,
         rules_csv_path=rules_csv_path,
     )
@@ -77,6 +74,18 @@ def _resolve_rules_csv(manifest_path: Path | None) -> Path | None:
     if resolved is not None and not resolved.exists():
         raise FileNotFoundError(resolved)
     return resolved
+
+
+def _resolve_source_url(source_url: str | None, manifest_path: Path | None) -> str:
+    if source_url:
+        return source_url
+    if manifest_path is not None:
+        manifest = load_manifest(manifest_path)
+        manifest_page_url = manifest.get("page_url")
+        if manifest_page_url:
+            return str(manifest_page_url)
+        raise KeyError(f"page_url is missing in manifest: {manifest_path}")
+    raise ValueError("--source-url か --manifest のどちらかで source URL を指定してください")
 
 
 if __name__ == "__main__":

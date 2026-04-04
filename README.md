@@ -37,9 +37,12 @@ uv sync
 ```bash
 uv run python scripts/fetch_mhlw.py --output-dir .local/raw/mhlw
 uv run python scripts/extract_dpc_pdf.py --manifest .local/raw/mhlw/manifest.json --output .local/raw/mhlw/dpc_rules.csv
-uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --output .local/intermediate/dpc-2026.json
+uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --fiscal-year 2026 --output .local/intermediate/dpc-2026.json
 uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
 ```
+
+`transform_dpc.py` は年度の誤爆を避けるため `--fiscal-year` を必須にしています。
+`--source-url` は未指定時、`--manifest` に含まれる `page_url` を使います。
 
 ## 使い方
 

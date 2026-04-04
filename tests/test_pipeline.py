@@ -35,6 +35,8 @@ def test_manifestからtransformしてsqliteまで作れる(tmp_path) -> None:
             "scripts/transform_dpc.py",
             "--manifest",
             str(tmp_path / "manifest.json"),
+            "--fiscal-year",
+            "2026",
             "--output",
             str(snapshot_path),
         ],
