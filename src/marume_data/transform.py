@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import re
 from dataclasses import dataclass
@@ -19,6 +20,17 @@ class DPCSourceLink:
 class DPCPageMetadata:
     title: str | None
     dpc_links: list[DPCSourceLink]
+
+
+@dataclass(slots=True)
+class DPCFlatRuleRow:
+    rule_id: str
+    priority: int
+    dpc_code: str
+    mdc_code: str | None
+    label: str | None
+    main_diagnosis: str | None
+    procedures: list[str]
 
 
 class _MHLWPageParser(HTMLParser):
@@ -73,12 +85,32 @@ def write_snapshot_from_mhlw_html(
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def write_snapshot_from_sources(
+    output_path: Path,
+    fiscal_year: int,
+    source_url: str,
+    page_metadata: DPCPageMetadata,
+    rules_csv_path: Path | None = None,
+) -> None:
+    rules = parse_dpc_rules_csv(rules_csv_path) if rules_csv_path else []
+    payload = build_snapshot_payload(
+        fiscal_year=fiscal_year,
+        source_url=source_url,
+        page_metadata=page_metadata,
+        flat_rules=rules,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def build_snapshot_payload(
     fiscal_year: int,
     source_url: str,
     page_metadata: DPCPageMetadata,
+    flat_rules: list[DPCFlatRuleRow] | None = None,
 ) -> dict[str, object]:
     latest_link = page_metadata.dpc_links[0] if page_metadata.dpc_links else None
+    rules = [_build_rule_payload(row) for row in flat_rules or []]
     return {
         "rule_set": {
             "rule_set_id": f"dpc-{fiscal_year}",
@@ -88,15 +120,16 @@ def build_snapshot_payload(
             "source_published_at": latest_link.updated_at if latest_link else None,
             "build_id": "manual",
             "built_at": None,
-            "rules": [],
+            "rules": rules,
         },
         "icd_master": [],
         "procedure_master": [],
         "metadata": {
-            "note": "rules are not parsed yet; page metadata and source links were extracted",
+            "note": "page metadata and source links were extracted; rules may come from CSV fixtures",
             "source_title": page_metadata.title or "",
             "dpc_link_count": str(len(page_metadata.dpc_links)),
             "latest_dpc_url": latest_link.url if latest_link else "",
+            "rule_count": str(len(rules)),
         },
         "source_links": [
             {"label": link.label, "url": link.url, "updated_at": link.updated_at}
@@ -126,6 +159,30 @@ def parse_mhlw_dpc_page(html: str, base_url: str) -> DPCPageMetadata:
         title=_normalize_space("".join(parser.title_parts)) or None,
         dpc_links=links,
     )
+
+
+def parse_dpc_rules_csv(path: Path) -> list[DPCFlatRuleRow]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = []
+        for raw in reader:
+            procedures = [
+                item
+                for item in (_normalize_space(part) for part in (raw.get("procedures") or "").split("|"))
+                if item
+            ]
+            rows.append(
+                DPCFlatRuleRow(
+                    rule_id=raw["rule_id"],
+                    priority=int(raw["priority"]),
+                    dpc_code=raw["dpc_code"],
+                    mdc_code=raw.get("mdc_code") or None,
+                    label=raw.get("label") or None,
+                    main_diagnosis=raw.get("main_diagnosis") or None,
+                    procedures=procedures,
+                )
+            )
+    return rows
 
 
 def write_placeholder_snapshot(output_path: Path, fiscal_year: int, source_url: str) -> None:
@@ -168,3 +225,35 @@ def _extract_updated_at(text: str) -> str | None:
 
 def _normalize_space(text: str) -> str:
     return " ".join(text.replace("\u3000", " ").split())
+
+
+def _build_rule_payload(row: DPCFlatRuleRow) -> dict[str, object]:
+    conditions: list[dict[str, object]] = []
+    if row.main_diagnosis:
+        conditions.append(
+            {
+                "condition_id": f"{row.rule_id}-main-diagnosis",
+                "condition_type": "main_diagnosis",
+                "operator": "eq",
+                "value_text": row.main_diagnosis,
+                "negated": False,
+            }
+        )
+    if row.procedures:
+        conditions.append(
+            {
+                "condition_id": f"{row.rule_id}-procedures",
+                "condition_type": "procedure",
+                "operator": "in",
+                "value_json": row.procedures,
+                "negated": False,
+            }
+        )
+    return {
+        "rule_id": row.rule_id,
+        "priority": row.priority,
+        "dpc_code": row.dpc_code,
+        "mdc_code": row.mdc_code,
+        "label": row.label,
+        "conditions": conditions,
+    }
