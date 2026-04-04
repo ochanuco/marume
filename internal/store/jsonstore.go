@@ -29,6 +29,7 @@ func (e FiscalYearMismatchError) Unwrap() error {
 	return ErrFiscalYearMismatch
 }
 
+// JSONRuleStore loads a single JSON rule snapshot from disk.
 type JSONRuleStore struct {
 	path string
 }

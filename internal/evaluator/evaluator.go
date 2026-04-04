@@ -11,7 +11,10 @@ import (
 	"github.com/ochanuco/marume/internal/domain"
 )
 
+// ErrNoClassification indicates that no rule matched the given case input.
 var ErrNoClassification = errors.New("no classification matched")
+
+// ErrRuleDefinition indicates that a rule set contains unsupported or malformed rule definitions.
 var ErrRuleDefinition = errors.New("rule definition error")
 
 // RuleStore loads a rule set for a requested fiscal year.
@@ -47,7 +50,7 @@ func ValidateRuleSet(ruleSet domain.RuleSet) error {
 	return nil
 }
 
-// Classify evaluates all candidate rules, preserving the best match only if no definition error exists.
+// Classify evaluates all candidate rules and returns the highest-priority match when the rule set is valid.
 func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domain.ClassificationResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
@@ -89,7 +92,7 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 	return domain.ClassificationResult{}, ErrNoClassification
 }
 
-// Explain returns candidate-rule diagnostics and mirrors Classify's context/error behavior.
+// Explain returns per-rule diagnostics while mirroring Classify's context and error behavior.
 func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain.ExplainResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {

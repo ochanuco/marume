@@ -27,6 +27,7 @@ const defaultRulePath = "rules/rules.json"
 // Version is the CLI version and may be overridden at build time with -ldflags.
 var Version = "dev"
 
+// Run dispatches a CLI subcommand and writes user-facing output to the provided streams.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printUsage(stderr)
@@ -55,6 +56,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 }
 
+// ExitCode maps domain and CLI errors to process exit codes.
 func ExitCode(err error) int {
 	switch {
 	case err == nil:
