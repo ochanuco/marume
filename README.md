@@ -41,7 +41,7 @@ uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json 
 uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
 ```
 
-`transform_dpc.py` は年度の誤爆を避けるため `--fiscal-year` を必須にしています。
+`transform_dpc.py` は `--fiscal-year` を必須にしています。
 `--source-url` は未指定時、`--manifest` に含まれる `page_url` を使います。
 
 ## 使い方
