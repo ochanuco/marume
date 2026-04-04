@@ -500,10 +500,17 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 			MessageEN: messageEN,
 		}
 	case errors.Is(err, store.ErrFiscalYearMismatch):
+		message := fmt.Sprintf("ルール年度と症例年度が一致しません: %v", err)
+		messageEN := fmt.Sprintf("rule fiscal year does not match case fiscal year: %v", err)
+		var mismatch store.FiscalYearMismatchError
+		if errors.As(err, &mismatch) {
+			message = fmt.Sprintf("ルール年度と症例年度が一致しません: %d と %d", mismatch.RuleSetFiscalYear, mismatch.RequestedYear)
+			messageEN = fmt.Sprintf("rule fiscal year does not match case fiscal year: %d vs %d", mismatch.RuleSetFiscalYear, mismatch.RequestedYear)
+		}
 		return &batchErrorResult{
 			Code:      "FISCAL_YEAR_MISMATCH",
-			Message:   fmt.Sprintf("ルール年度と症例年度が一致しません: %v", err),
-			MessageEN: fmt.Sprintf("rule fiscal year does not match case fiscal year: %v", err),
+			Message:   message,
+			MessageEN: messageEN,
 		}
 	default:
 		return &batchErrorResult{
