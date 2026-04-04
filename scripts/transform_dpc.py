@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from marume_data.transform import write_placeholder_snapshot
+from marume_data.transform import write_snapshot_from_mhlw_html
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,7 +23,12 @@ def main() -> int:
     args = parse_args()
     if not args.input.exists():
         raise FileNotFoundError(args.input)
-    write_placeholder_snapshot(args.output, fiscal_year=args.fiscal_year, source_url=args.source_url)
+    write_snapshot_from_mhlw_html(
+        args.input,
+        args.output,
+        fiscal_year=args.fiscal_year,
+        source_url=args.source_url,
+    )
     print(args.output)
     return 0
 
