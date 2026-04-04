@@ -30,7 +30,7 @@ go build ./cmd/marume
 ```bash
 ./marume classify --rules testdata/rules/rules-2026.json --input testdata/cases/case-ok.json
 ./marume classify-batch --rules testdata/rules/rules-2026.json --input testdata/cases/cases.jsonl --output result.jsonl
-./marume explain --rules testdata/rules/rules-2026.json --input testdata/cases/case-age-only.json
+./marume explain --rules testdata/rules/rules-2026.json --input testdata/cases/case-age-diagnosis-without-procedure.json
 ./marume validate --input testdata/cases/case-ok.json
 ./marume version --rules testdata/rules/rules-2026.json
 ```
