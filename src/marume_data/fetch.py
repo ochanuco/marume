@@ -76,6 +76,19 @@ def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
     return None
 
 
+def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path | None:
+    manifest = load_manifest(manifest_path)
+    matched_assets = [
+        asset
+        for asset in manifest.get("assets", [])
+        if asset.get("kind") == kind and str(asset.get("path", "")).endswith(".pdf")
+    ]
+    if not matched_assets:
+        return None
+    matched_assets.sort(key=lambda asset: str(asset.get("updated_at") or ""), reverse=True)
+    return manifest_path.parent / str(matched_assets[0]["path"])
+
+
 def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
     kind = _classify_link_kind(link.label)
     updated_suffix = (link.updated_at or "unknown").replace("-", "")
