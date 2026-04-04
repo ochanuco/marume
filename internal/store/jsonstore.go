@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,8 +24,11 @@ func (s *JSONRuleStore) ReadRuleSet(_ context.Context) (domain.RuleSet, error) {
 		return domain.RuleSet{}, fmt.Errorf("read rule set: %w", err)
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+
 	var ruleSet domain.RuleSet
-	if err := json.Unmarshal(data, &ruleSet); err != nil {
+	if err := decoder.Decode(&ruleSet); err != nil {
 		return domain.RuleSet{}, fmt.Errorf("decode rule set: %w", err)
 	}
 

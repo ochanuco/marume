@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -98,6 +99,29 @@ func TestVersionは別年度ルールでもメタ情報を表示できる(t *tes
 
 	if !strings.Contains(stdout.String(), `"rule_version": "2027.0.0-poc"`) {
 		t.Fatalf("2027 年度の rule_version を期待しましたが、実際の出力は %s でした", stdout.String())
+	}
+}
+
+func TestClassifyBatchは64KBを超える行も処理できる(t *testing.T) {
+	rulesPath := testdataPath(t, "rules", "rules-2026.json")
+	largeDiagnosis := strings.Repeat("A", 70*1024)
+	input := fmt.Sprintf("{\"case_id\":\"large\",\"fiscal_year\":2026,\"main_diagnosis\":\"I219\",\"diagnoses\":[\"%s\"],\"procedures\":[\"K549\"],\"comorbidities\":[]}\n", largeDiagnosis)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify-batch", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("長いJSONL行の classify-batch でエラーが返りました: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"status":"ok"`) {
+		t.Fatalf("長いJSONL行でも成功を期待しましたが、実際の出力は %s でした", stdout.String())
 	}
 }
 

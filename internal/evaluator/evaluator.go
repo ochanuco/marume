@@ -28,6 +28,9 @@ func New(store RuleStore) *Evaluator {
 
 func ValidateRuleSet(ruleSet domain.RuleSet) error {
 	for _, rule := range ruleSet.Rules {
+		if len(rule.Conditions) == 0 {
+			return fmt.Errorf("rule %s: %w", rule.ID, newRuleDefinitionError("NO_CONDITIONS_DEFINED", "ルールに条件が定義されていません", "no conditions defined for rule"))
+		}
 		for _, condition := range rule.Conditions {
 			if err := validateConditionDefinition(condition); err != nil {
 				return fmt.Errorf("rule %s: %w", rule.ID, err)
@@ -43,20 +46,33 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 		return domain.ClassificationResult{}, err
 	}
 
+	var bestMatch *domain.ClassificationResult
+	var definitionErr error
+
 	for _, rule := range sortRules(ruleSet.Rules) {
 		matched, reasons, _, err := evaluateRule(input, rule)
 		if err != nil {
-			return domain.ClassificationResult{}, err
+			if definitionErr == nil {
+				definitionErr = fmt.Errorf("rule %s: %w", rule.ID, err)
+			}
+			continue
 		}
-		if matched {
-			return domain.ClassificationResult{
+		if matched && bestMatch == nil {
+			bestMatch = &domain.ClassificationResult{
 				CaseID:        input.CaseID,
 				DPCCode:       rule.DPCCode,
 				Version:       ruleSet.RuleVersion,
 				MatchedRuleID: rule.ID,
 				Reasons:       reasons,
-			}, nil
+			}
 		}
+	}
+
+	if definitionErr != nil {
+		return domain.ClassificationResult{}, definitionErr
+	}
+	if bestMatch != nil {
+		return *bestMatch, nil
 	}
 
 	return domain.ClassificationResult{}, ErrNoClassification
@@ -113,6 +129,10 @@ func sortRules(rules []domain.Rule) []domain.Rule {
 }
 
 func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.ReasonEntry, *domain.ReasonEntry, error) {
+	if len(rule.Conditions) == 0 {
+		return false, nil, nil, newRuleDefinitionError("NO_CONDITIONS_DEFINED", "ルールに条件が定義されていません", "no conditions defined for rule")
+	}
+
 	reasons := make([]domain.ReasonEntry, 0, len(rule.Conditions))
 
 	for _, condition := range rule.Conditions {

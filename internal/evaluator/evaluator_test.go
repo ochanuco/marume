@@ -72,6 +72,42 @@ func Test優先順位が最も高い一致ルールを採用する(t *testing.T)
 	}
 }
 
+func Test後続ルールの定義エラーを見逃さず分類を失敗させる(t *testing.T) {
+	engine := evaluator.New(stubStore{
+		ruleSet: domain.RuleSet{
+			FiscalYear:  2026,
+			RuleVersion: "2026.0.0-poc",
+			Rules: []domain.Rule{
+				{
+					ID:       "selected",
+					Priority: 10,
+					DPCCode:  "040080xx99x0xx",
+					Conditions: []domain.Condition{
+						{Type: "main_diagnosis", Operator: "equals", Values: []string{"I219"}},
+					},
+				},
+				{
+					ID:       "broken",
+					Priority: 20,
+					DPCCode:  "999999",
+					Conditions: []domain.Condition{
+						{Type: "main_diagnosis", Operator: "contains_any", Values: []string{"I219"}},
+					},
+				},
+			},
+		},
+	})
+
+	_, err := engine.Classify(context.Background(), domain.CaseInput{
+		CaseID:        "123",
+		FiscalYear:    2026,
+		MainDiagnosis: "I219",
+	})
+	if !errors.Is(err, evaluator.ErrRuleDefinition) {
+		t.Fatalf("後続ルールの定義エラーで ErrRuleDefinition を期待しましたが、実際は %v でした", err)
+	}
+}
+
 func Test一致するルールがない場合は分類不能エラーを返す(t *testing.T) {
 	procedureAge := 75
 	engine := evaluator.New(stubStore{
@@ -149,6 +185,25 @@ func Testルールセット検証で未対応条件を事前に検出する(t *t
 				Conditions: []domain.Condition{
 					{Type: "age", Operator: "equals"},
 				},
+			},
+		},
+	}
+
+	err := evaluator.ValidateRuleSet(ruleSet)
+	if !errors.Is(err, evaluator.ErrRuleDefinition) {
+		t.Fatalf("ErrRuleDefinition を期待しましたが、実際は %v でした", err)
+	}
+}
+
+func Test条件ゼロのルールはルール定義エラーとして拒否する(t *testing.T) {
+	ruleSet := domain.RuleSet{
+		FiscalYear: 2026,
+		Rules: []domain.Rule{
+			{
+				ID:         "empty",
+				Priority:   10,
+				DPCCode:    "040080xx99x0xx",
+				Conditions: nil,
 			},
 		},
 	}
