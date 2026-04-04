@@ -1,0 +1,42 @@
+{
+  "fiscal_year": 2026,
+  "rule_version": "2026.0.0-poc",
+  "build_id": "local-dev",
+  "built_at": "2026-04-04T00:00:00+09:00",
+  "rules": [
+    {
+      "id": "R-2026-00010",
+      "priority": 10,
+      "dpc_code": "040080xx99x0xx",
+      "conditions": [
+        {
+          "type": "main_diagnosis",
+          "operator": "equals",
+          "values": ["I219"]
+        },
+        {
+          "type": "procedures",
+          "operator": "contains_any",
+          "values": ["K549"]
+        }
+      ]
+    },
+    {
+      "id": "R-2026-00020",
+      "priority": 20,
+      "dpc_code": "040081xx99x0xx",
+      "conditions": [
+        {
+          "type": "main_diagnosis",
+          "operator": "equals",
+          "values": ["I219"]
+        },
+        {
+          "type": "age",
+          "operator": "gte",
+          "int_value": 70
+        }
+      ]
+    }
+  ]
+}

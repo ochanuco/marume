@@ -1,0 +1,20 @@
+{
+  "fiscal_year": 2027,
+  "rule_version": "2027.0.0-poc",
+  "build_id": "local-dev-2027",
+  "built_at": "2027-04-01T00:00:00+09:00",
+  "rules": [
+    {
+      "id": "R-2027-00010",
+      "priority": 10,
+      "dpc_code": "990000xx99x0xx",
+      "conditions": [
+        {
+          "type": "main_diagnosis",
+          "operator": "equals",
+          "values": ["Z001"]
+        }
+      ]
+    }
+  ]
+}
