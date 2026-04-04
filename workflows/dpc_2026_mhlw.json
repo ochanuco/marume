@@ -1,0 +1,10 @@
+{
+  "source_url": "https://www.mhlw.go.jp/stf/newpage_67729.html",
+  "fiscal_year": 2026,
+  "paths": {
+    "raw_dir": ".local/raw/mhlw_2026",
+    "rules_csv": ".local/raw/mhlw_2026/dpc_rules.csv",
+    "snapshot_json": ".local/intermediate/dpc-2026.json",
+    "sqlite_output": ".local/sqlite/rules-2026.sqlite"
+  }
+}

@@ -32,6 +32,12 @@ uv venv --python 3.13
 uv sync
 ```
 
+workflow JSON を使う場合は、`workflows/dpc_2026_mhlw.json` を起点にします。
+
+```bash
+uv run python scripts/run_workflow.py --workflow workflows/dpc_2026_mhlw.json
+```
+
 最小の Python データパイプラインは以下の 4 段階です。
 
 ```bash
