@@ -113,9 +113,9 @@ func TestExplainは分類不能でも候補ルールをJSON出力する(t *testi
 	if _, ok := result["candidate_rules"]; !ok {
 		t.Fatalf("candidate_rules を期待しましたが、実際の出力は %v でした", result)
 	}
-	selectedRule, exists := result["selected_rule"]
-	if exists && selectedRule != nil && selectedRule != "" {
-		t.Fatalf("分類不能時の selected_rule は空または未設定を期待しましたが、実際は %v でした", selectedRule)
+	selectedRule, _ := result["selected_rule"].(string)
+	if selectedRule != "" {
+		t.Fatalf("分類不能時の selected_rule は空文字を期待しましたが、実際は %v でした", selectedRule)
 	}
 }
 
@@ -163,8 +163,13 @@ func TestClassifyBatchは64KBを超える行も処理できる(t *testing.T) {
 	if err != nil {
 		t.Fatalf("長いJSONL行の classify-batch でエラーが返りました: %v", err)
 	}
-	if !strings.Contains(stdout.String(), `"status":"ok"`) {
-		t.Fatalf("長いJSONL行でも成功を期待しましたが、実際の出力は %s でした", stdout.String())
+	line := strings.TrimSpace(stdout.String())
+	var result map[string]any
+	if decodeErr := json.Unmarshal([]byte(line), &result); decodeErr != nil {
+		t.Fatalf("長いJSONL行の結果をJSONとして読み取れませんでした: %v", decodeErr)
+	}
+	if result["status"] != "ok" {
+		t.Fatalf("長いJSONL行でも成功を期待しましたが、実際の出力は %v でした", result["status"])
 	}
 }
 

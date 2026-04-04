@@ -37,6 +37,7 @@ go build ./cmd/marume
 
 `stdin` から読む場合は `--input -` を使います。
 `classify-batch` は `JSONL` を 1 行ずつ読み、結果も `JSONL` で返します。
+`explain` は分類不能でも候補ルールの JSON を返し、`selected_rule` は空文字、終了コードは `0` です。
 
 ### `classify` の出力例
 

@@ -64,6 +64,8 @@ func ExitCode(err error) int {
 		return 2
 	case errors.Is(err, os.ErrNotExist):
 		return 3
+	case errors.Is(err, evaluator.ErrRuleDefinition):
+		return 5
 	default:
 		return 4
 	}
@@ -168,6 +170,10 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	lineNo := 0
 
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		lineNo++
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -175,6 +181,9 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 
 		result := classifyBatchLine(ctx, engine, lineNo, line)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := encoder.Encode(result); err != nil {
 			return fmt.Errorf("%w: バッチ結果の書き込みに失敗しました: %v", errRuleRuntime, err)
 		}
@@ -223,6 +232,9 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	result, err := engine.Explain(ctx, input)
 	if err != nil {
 		if errors.Is(err, evaluator.ErrNoClassification) {
+			// explain は候補ルールのJSONを返すことを優先し、分類不能は selected_rule=""
+			// をシグナルとして writeJSON しつつ exit 0 にする。
+			result.SelectedRule = ""
 			if writeErr := writeJSON(stdout, result); writeErr != nil {
 				return writeErr
 			}
@@ -435,12 +447,6 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 			Code:      "RULE_DEFINITION_ERROR",
 			Message:   fmt.Sprintf("ルール定義エラーが見つかりました: %v", err),
 			MessageEN: fmt.Sprintf("rule definition error: %v", err),
-		}
-	case errors.Is(err, os.ErrNotExist):
-		return &batchErrorResult{
-			Code:      "RULES_NOT_FOUND",
-			Message:   "ルールセットファイルが見つかりません",
-			MessageEN: "rule set file not found",
 		}
 	default:
 		return &batchErrorResult{
