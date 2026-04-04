@@ -7,12 +7,9 @@ from pathlib import Path
 from marume_data.fetch import fetch_mhlw_dpc_assets
 
 
-DEFAULT_DPC_URL = "https://www.mhlw.go.jp/stf/newpage_67729.html"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch MHLW source pages for marume data prep.")
-    parser.add_argument("--url", default=DEFAULT_DPC_URL, help="Source page URL to fetch.")
+    parser.add_argument("--url", required=True, help="Source page URL to fetch.")
     parser.add_argument(
         "--output-dir",
         type=Path,

@@ -35,7 +35,7 @@ uv sync
 最小の Python データパイプラインは以下の 4 段階です。
 
 ```bash
-uv run python scripts/fetch_mhlw.py --output-dir .local/raw/mhlw
+uv run python scripts/fetch_mhlw.py --url https://www.mhlw.go.jp/stf/newpage_67729.html --output-dir .local/raw/mhlw
 uv run python scripts/extract_dpc_pdf.py --manifest .local/raw/mhlw/manifest.json --output .local/raw/mhlw/dpc_rules.csv
 uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --fiscal-year 2026 --output .local/intermediate/dpc-2026.json
 uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
