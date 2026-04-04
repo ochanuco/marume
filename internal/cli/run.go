@@ -309,6 +309,14 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	switch {
+	case ruleSet.RuleVersion == "":
+		return fmt.Errorf("%w: rule_version は必須です", errInvalidInput)
+	case ruleSet.BuildID == "":
+		return fmt.Errorf("%w: build_id は必須です", errInvalidInput)
+	case ruleSet.BuiltAt == "":
+		return fmt.Errorf("%w: built_at は必須です", errInvalidInput)
+	}
 
 	return writeJSON(stdout, map[string]string{
 		"cli_version":  Version,
@@ -464,7 +472,7 @@ func validateCaseInput(input domain.CaseInput) error {
 	switch {
 	case input.CaseID == "":
 		return fmt.Errorf("%w: case_id は必須です", errInvalidInput)
-	case input.FiscalYear == 0:
+	case input.FiscalYear <= 0:
 		return fmt.Errorf("%w: fiscal_year は必須です", errInvalidInput)
 	case input.MainDiagnosis == "":
 		return fmt.Errorf("%w: main_diagnosis は必須です", errInvalidInput)

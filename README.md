@@ -67,7 +67,7 @@ go build ./cmd/marume
 ```json
 {"line_no":1,"case_id":"123","status":"ok","result":{"case_id":"123","dpc_code":"040080xx99x0xx","version":"2026.0.0-poc","matched_rule_id":"R-2026-00010","reasons":[{"code":"MAIN_DIAGNOSIS_MATCH","message":"主傷病名が I219 に一致しました","message_en":"main diagnosis matched I219"},{"code":"PROCEDURE_MATCH","message":"手術・処置コードに K549 が含まれています","message_en":"procedures contains K549"}]}}
 {"line_no":2,"case_id":"999","status":"error","error":{"code":"NO_CLASSIFICATION","message":"症例 999 に一致する分類が見つかりません","message_en":"no classification matched for case 999"}}
-{"line_no":3,"status":"error","error":{"code":"INVALID_JSON","message":"3 行目のJSONが不正です","message_en":"invalid JSON at line 3"}}
+{"line_no":3,"status":"error","error":{"code":"INVALID_JSON","message":"3 行目のJSONが不正です: <decoder error>","message_en":"invalid JSON at line 3: <decoder error>"}}
 ```
 
 ## 現在の構造

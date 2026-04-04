@@ -197,6 +197,76 @@ func TestRulesPathが空文字なら入力エラーを返す(t *testing.T) {
 	}
 }
 
+func TestFiscalYearが負値なら入力エラーを返す(t *testing.T) {
+	input := `{"case_id":"123","fiscal_year":-2026,"main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}`
+	rulesPath := testdataPath(t, "rules", "rules-2026.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("負の fiscal_year では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("負の fiscal_year の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+}
+
+func TestVersionは必須メタデータ欠落を入力エラーにする(t *testing.T) {
+	tmpDir := t.TempDir()
+	rulesPath := filepath.Join(tmpDir, "rules-missing-meta.json")
+	rulesJSON := `{
+  "fiscal_year": 2026,
+  "rule_version": "",
+  "build_id": "build-1",
+  "built_at": "2026-01-01T00:00:00Z",
+  "rules": [
+    {
+      "id": "R-1",
+      "priority": 10,
+      "dpc_code": "040080xx99x0xx",
+      "conditions": [
+        {
+          "type": "main_diagnosis",
+          "operator": "equals",
+          "values": ["I219"]
+        }
+      ]
+    }
+  ]
+}`
+	if err := os.WriteFile(rulesPath, []byte(rulesJSON), 0o644); err != nil {
+		t.Fatalf("メタデータ欠落ルールの作成に失敗しました: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"version", "--rules", rulesPath},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("必須メタデータ欠落では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("必須メタデータ欠落の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(err.Error(), "rule_version は必須です") {
+		t.Fatalf("必須メタデータ欠落のエラーメッセージが想定と異なります: %v", err)
+	}
+}
+
 func TestClassifyBatchはルール読み込み失敗時に既存出力を壊さない(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "result.jsonl")
