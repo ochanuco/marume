@@ -11,6 +11,7 @@ import (
 	"github.com/ochanuco/marume/internal/cli"
 )
 
+// main wires OS signals into the CLI runner and maps returned errors to exit codes.
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

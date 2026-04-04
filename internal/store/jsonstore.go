@@ -21,10 +21,12 @@ type FiscalYearMismatchError struct {
 	RequestedYear     int
 }
 
+// Error formats the fiscal-year mismatch for user-facing logs and CLI output.
 func (e FiscalYearMismatchError) Error() string {
 	return fmt.Sprintf("rule set fiscal year %d does not match requested %d", e.RuleSetFiscalYear, e.RequestedYear)
 }
 
+// Unwrap exposes ErrFiscalYearMismatch for errors.Is checks.
 func (e FiscalYearMismatchError) Unwrap() error {
 	return ErrFiscalYearMismatch
 }

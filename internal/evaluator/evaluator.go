@@ -142,6 +142,7 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 	return result, nil
 }
 
+// sortRules returns a stable priority order used by classify and explain.
 func sortRules(rules []domain.Rule) []domain.Rule {
 	cloned := append([]domain.Rule(nil), rules...)
 	sort.Slice(cloned, func(i, j int) bool {
@@ -153,6 +154,7 @@ func sortRules(rules []domain.Rule) []domain.Rule {
 	return cloned
 }
 
+// evaluateRule checks all conditions for one rule and returns the first mismatch when present.
 func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.ReasonEntry, *domain.ReasonEntry, error) {
 	if len(rule.Conditions) == 0 {
 		return false, nil, nil, newRuleDefinitionError("NO_CONDITIONS_DEFINED", "ルールに条件が定義されていません", "no conditions defined for rule")
@@ -174,6 +176,7 @@ func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.Reas
 	return true, reasons, nil, nil
 }
 
+// evaluateCondition evaluates one normalized rule condition against a case input.
 func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool, domain.ReasonEntry, error) {
 	if err := validateConditionDefinition(condition); err != nil {
 		return false, domain.ReasonEntry{}, err
@@ -255,6 +258,7 @@ func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool
 	}
 }
 
+// evaluateContainsAny evaluates contains_any style conditions against a string slice field.
 func evaluateContainsAny(label string, actual []string, condition domain.Condition) (bool, domain.ReasonEntry, error) {
 	if condition.Operator != "contains_any" || len(condition.Values) == 0 {
 		return false, domain.ReasonEntry{}, newRuleDefinitionError(strings.ToUpper(label)+"_CONDITION_UNSUPPORTED", containsAnyUnsupportedMessage(label), fmt.Sprintf("unsupported %s condition", label))
@@ -279,6 +283,7 @@ func evaluateContainsAny(label string, actual []string, condition domain.Conditi
 	}, nil
 }
 
+// isNilRuleStore detects typed nil implementations hidden behind the RuleStore interface.
 func isNilRuleStore(store RuleStore) bool {
 	if store == nil {
 		return true
@@ -293,6 +298,7 @@ func isNilRuleStore(store RuleStore) bool {
 	}
 }
 
+// validateConditionDefinition rejects unsupported or malformed condition definitions.
 func validateConditionDefinition(condition domain.Condition) error {
 	switch condition.Type {
 	case "main_diagnosis", "sex":
@@ -323,18 +329,22 @@ type ruleDefinitionError struct {
 	reason domain.ReasonEntry
 }
 
+// Error returns the localized rule-definition error message.
 func (e *ruleDefinitionError) Error() string {
 	return e.reason.Message
 }
 
+// Unwrap exposes ErrRuleDefinition for errors.Is checks.
 func (e *ruleDefinitionError) Unwrap() error {
 	return ErrRuleDefinition
 }
 
+// Reason returns the structured explanation attached to a rule-definition error.
 func (e *ruleDefinitionError) Reason() domain.ReasonEntry {
 	return e.reason
 }
 
+// newRuleDefinitionError creates a structured rule-definition error with bilingual messages.
 func newRuleDefinitionError(code, message, messageEN string) error {
 	return &ruleDefinitionError{
 		reason: domain.ReasonEntry{
@@ -345,6 +355,7 @@ func newRuleDefinitionError(code, message, messageEN string) error {
 	}
 }
 
+// labelJa returns the Japanese display label for a condition target.
 func labelJa(label string) string {
 	switch label {
 	case "diagnoses":
@@ -358,6 +369,7 @@ func labelJa(label string) string {
 	}
 }
 
+// singularReasonPrefix normalizes plural field names for reason code generation.
 func singularReasonPrefix(label string) string {
 	switch label {
 	case "diagnoses":
@@ -371,6 +383,7 @@ func singularReasonPrefix(label string) string {
 	}
 }
 
+// containsAnyUnsupportedMessage returns the localized unsupported-definition message for a field.
 func containsAnyUnsupportedMessage(label string) string {
 	switch label {
 	case "diagnoses":

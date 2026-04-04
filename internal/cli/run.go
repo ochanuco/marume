@@ -76,6 +76,7 @@ func ExitCode(err error) int {
 	}
 }
 
+// runClassify handles the single-case classify subcommand.
 func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("classify", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -121,6 +122,7 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 	return writeJSON(stdout, result)
 }
 
+// runClassifyBatch handles the batch classify subcommand over JSONL input.
 func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (retErr error) {
 	flags := flag.NewFlagSet("classify-batch", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -209,6 +211,7 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	return nil
 }
 
+// runExplain handles the explain subcommand for a single case input.
 func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("explain", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -263,6 +266,7 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	return writeJSON(stdout, result)
 }
 
+// runValidate validates the minimum required input fields without classifying.
 func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -300,6 +304,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) error
 	})
 }
 
+// runVersion prints CLI and rule snapshot metadata.
 func runVersion(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("version", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -367,6 +372,7 @@ type fixedRuleStore struct {
 	ruleSet domain.RuleSet
 }
 
+// LoadRuleSet returns the preloaded rule set after checking the requested fiscal year.
 func (s fixedRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.RuleSet, error) {
 	if s.ruleSet.FiscalYear != fiscalYear {
 		return domain.RuleSet{}, store.FiscalYearMismatchError{
@@ -377,6 +383,7 @@ func (s fixedRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.R
 	return s.ruleSet, nil
 }
 
+// loadCaseInput reads and strictly decodes one case JSON document.
 func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
 	reader, cleanup, err := openInput(path, stdin)
 	if err != nil {
@@ -391,6 +398,7 @@ func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
 	return input, nil
 }
 
+// openInput returns stdin for "-" or opens the requested file path for reading.
 func openInput(path string, stdin io.Reader) (io.Reader, func(), error) {
 	if path == "-" {
 		return stdin, func() {}, nil
@@ -403,6 +411,7 @@ func openInput(path string, stdin io.Reader) (io.Reader, func(), error) {
 	return file, func() { _ = file.Close() }, nil
 }
 
+// openOutput returns stdout for "-" or creates the requested file path for writing.
 func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) {
 	if path == "-" {
 		return stdout, func() error { return nil }, nil
@@ -415,6 +424,7 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) 
 	return file, file.Close, nil
 }
 
+// classifyBatchLine classifies one JSONL line and normalizes errors into batch output.
 func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo int, line []byte) batchClassifyResult {
 	var input domain.CaseInput
 	if err := decodeStrictJSON(bytes.NewReader(line), &input); err != nil {
@@ -456,6 +466,7 @@ func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo 
 	return result
 }
 
+// decodeStrictJSON decodes one JSON value and rejects unknown fields or trailing data.
 func decodeStrictJSON(reader io.Reader, target any) error {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
@@ -468,6 +479,7 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 	return nil
 }
 
+// classifyBatchError maps runtime errors to the public batch error payload shape.
 func classifyBatchError(err error, caseID string) *batchErrorResult {
 	switch {
 	case errors.Is(err, evaluator.ErrNoClassification):
@@ -502,6 +514,7 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 	}
 }
 
+// validateCaseInput enforces the minimum POC input contract before evaluation.
 func validateCaseInput(input domain.CaseInput) error {
 	// NOTE: POCでは evaluator が最低限必要とする項目だけをここで検証している。
 	// procedures/comorbidities の空配列や age/sex の未指定はルール次第で許容し、
@@ -519,6 +532,7 @@ func validateCaseInput(input domain.CaseInput) error {
 	return nil
 }
 
+// validateBatchPaths rejects batch runs that would read from and write to the same file.
 func validateBatchPaths(inputPath, outputPath string) error {
 	if inputPath == "-" || outputPath == "-" {
 		return nil
@@ -553,6 +567,7 @@ func validateBatchPaths(inputPath, outputPath string) error {
 	return nil
 }
 
+// rejectExtraArgs rejects leftover positional arguments for flag-based subcommands.
 func rejectExtraArgs(flags *flag.FlagSet) error {
 	if flags.NArg() == 0 {
 		return nil
@@ -560,12 +575,14 @@ func rejectExtraArgs(flags *flag.FlagSet) error {
 	return fmt.Errorf("%w: 余分な引数があります: %v", errInvalidInput, flags.Args())
 }
 
+// writeJSON writes an indented JSON document followed by a trailing newline.
 func writeJSON(w io.Writer, value any) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(value)
 }
 
+// printUsage writes the top-level CLI help in Japanese.
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "使い方: marume <コマンド> [フラグ]")
 	fmt.Fprintln(w, "")
