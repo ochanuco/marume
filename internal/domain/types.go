@@ -34,8 +34,10 @@ type RuleSet struct {
 	FiscalYear  int    `json:"fiscal_year"`
 	RuleVersion string `json:"rule_version"`
 	BuildID     string `json:"build_id"`
-	BuiltAt     string `json:"built_at"`
-	Rules       []Rule `json:"rules"`
+	// NOTE: POCではスナップショット入力の柔軟性を優先して string のままにしている。
+	// 時刻演算や厳密な検証が必要になった段階で time.Time への移行を検討する。
+	BuiltAt string `json:"built_at"`
+	Rules   []Rule `json:"rules"`
 }
 
 // ClassificationResult is the machine-readable output of classify.
