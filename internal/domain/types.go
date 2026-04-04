@@ -3,7 +3,7 @@ package domain
 type CaseInput struct {
 	CaseID        string   `json:"case_id"`
 	FiscalYear    int      `json:"fiscal_year"`
-	Age           int      `json:"age"`
+	Age           *int     `json:"age"`
 	Sex           string   `json:"sex"`
 	MainDiagnosis string   `json:"main_diagnosis"`
 	Diagnoses     []string `json:"diagnoses"`
@@ -15,7 +15,7 @@ type Condition struct {
 	Type        string   `json:"type"`
 	Operator    string   `json:"operator"`
 	Values      []string `json:"values,omitempty"`
-	IntValue    int      `json:"int_value,omitempty"`
+	IntValue    *int     `json:"int_value,omitempty"`
 	Description string   `json:"description,omitempty"`
 }
 

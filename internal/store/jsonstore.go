@@ -17,7 +17,7 @@ func NewJSONRuleStore(path string) *JSONRuleStore {
 	return &JSONRuleStore{path: path}
 }
 
-func (s *JSONRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.RuleSet, error) {
+func (s *JSONRuleStore) ReadRuleSet(_ context.Context) (domain.RuleSet, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return domain.RuleSet{}, fmt.Errorf("read rule set: %w", err)
@@ -26,6 +26,15 @@ func (s *JSONRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.R
 	var ruleSet domain.RuleSet
 	if err := json.Unmarshal(data, &ruleSet); err != nil {
 		return domain.RuleSet{}, fmt.Errorf("decode rule set: %w", err)
+	}
+
+	return ruleSet, nil
+}
+
+func (s *JSONRuleStore) LoadRuleSet(ctx context.Context, fiscalYear int) (domain.RuleSet, error) {
+	ruleSet, err := s.ReadRuleSet(ctx)
+	if err != nil {
+		return domain.RuleSet{}, err
 	}
 	if ruleSet.FiscalYear != fiscalYear {
 		return domain.RuleSet{}, fmt.Errorf("rule set fiscal year %d does not match requested %d", ruleSet.FiscalYear, fiscalYear)

@@ -12,6 +12,7 @@ import (
 )
 
 var ErrNoClassification = errors.New("no classification matched")
+var ErrRuleDefinition = errors.New("rule definition error")
 
 type RuleStore interface {
 	LoadRuleSet(ctx context.Context, fiscalYear int) (domain.RuleSet, error)
@@ -25,6 +26,17 @@ func New(store RuleStore) *Evaluator {
 	return &Evaluator{store: store}
 }
 
+func ValidateRuleSet(ruleSet domain.RuleSet) error {
+	for _, rule := range ruleSet.Rules {
+		for _, condition := range rule.Conditions {
+			if err := validateConditionDefinition(condition); err != nil {
+				return fmt.Errorf("rule %s: %w", rule.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domain.ClassificationResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
@@ -32,7 +44,7 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 	}
 
 	for _, rule := range sortRules(ruleSet.Rules) {
-		matched, reasons, err := evaluateRule(input, rule)
+		matched, reasons, _, err := evaluateRule(input, rule)
 		if err != nil {
 			return domain.ClassificationResult{}, err
 		}
@@ -61,9 +73,9 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 	}
 
 	for _, rule := range sortRules(ruleSet.Rules) {
-		matched, reasons, err := evaluateRule(input, rule)
+		matched, reasons, mismatch, err := evaluateRule(input, rule)
 		if err != nil {
-			return domain.ExplainResult{}, err
+			return result, err
 		}
 
 		candidate := domain.CandidateExplain{
@@ -74,7 +86,7 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 			MatchedReasons: reasons,
 		}
 		if !matched {
-			candidate.UnmatchedReason = firstMismatch(input, rule)
+			candidate.UnmatchedReason = mismatch
 		} else if result.SelectedRule == "" {
 			result.SelectedRule = rule.ID
 		}
@@ -83,7 +95,7 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 	}
 
 	if result.SelectedRule == "" {
-		return domain.ExplainResult{}, ErrNoClassification
+		return result, ErrNoClassification
 	}
 
 	return result, nil
@@ -100,48 +112,41 @@ func sortRules(rules []domain.Rule) []domain.Rule {
 	return cloned
 }
 
-func firstMismatch(input domain.CaseInput, rule domain.Rule) *domain.ReasonEntry {
-	for _, condition := range rule.Conditions {
-		ok, reason := evaluateCondition(input, condition)
-		if !ok {
-			return &reason
-		}
-	}
-	return nil
-}
-
-func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.ReasonEntry, error) {
+func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.ReasonEntry, *domain.ReasonEntry, error) {
 	reasons := make([]domain.ReasonEntry, 0, len(rule.Conditions))
 
 	for _, condition := range rule.Conditions {
-		matched, reason := evaluateCondition(input, condition)
+		matched, reason, err := evaluateCondition(input, condition)
+		if err != nil {
+			return false, reasons, nil, err
+		}
 		if !matched {
-			return false, reasons, nil
+			return false, reasons, &reason, nil
 		}
 		reasons = append(reasons, reason)
 	}
 
-	return true, reasons, nil
+	return true, reasons, nil, nil
 }
 
-func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool, domain.ReasonEntry) {
+func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool, domain.ReasonEntry, error) {
 	switch condition.Type {
 	case "main_diagnosis":
 		if condition.Operator != "equals" || len(condition.Values) != 1 {
-			return false, unsupportedReason("UNSUPPORTED_MAIN_DIAGNOSIS_CONDITION", "主傷病名条件の定義が未対応です", "unsupported main_diagnosis condition")
+			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_MAIN_DIAGNOSIS_CONDITION", "主傷病名条件の定義が未対応です", "unsupported main_diagnosis condition")
 		}
 		if input.MainDiagnosis == condition.Values[0] {
 			return true, domain.ReasonEntry{
 				Code:      "MAIN_DIAGNOSIS_MATCH",
 				Message:   fmt.Sprintf("主傷病名が %s に一致しました", condition.Values[0]),
 				MessageEN: fmt.Sprintf("main diagnosis matched %s", condition.Values[0]),
-			}
+			}, nil
 		}
 		return false, domain.ReasonEntry{
 			Code:      "MAIN_DIAGNOSIS_MISMATCH",
 			Message:   fmt.Sprintf("主傷病名 %s は %s と一致しません", input.MainDiagnosis, condition.Values[0]),
 			MessageEN: fmt.Sprintf("main diagnosis %s did not equal %s", input.MainDiagnosis, condition.Values[0]),
-		}
+		}, nil
 	case "diagnoses":
 		return evaluateContainsAny("diagnoses", input.Diagnoses, condition)
 	case "procedures":
@@ -150,59 +155,69 @@ func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool
 		return evaluateContainsAny("comorbidities", input.Comorbidities, condition)
 	case "sex":
 		if condition.Operator != "equals" || len(condition.Values) != 1 {
-			return false, unsupportedReason("UNSUPPORTED_SEX_CONDITION", "性別条件の定義が未対応です", "unsupported sex condition")
+			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_SEX_CONDITION", "性別条件の定義が未対応です", "unsupported sex condition")
 		}
 		if strings.EqualFold(input.Sex, condition.Values[0]) {
 			return true, domain.ReasonEntry{
 				Code:      "SEX_MATCH",
 				Message:   fmt.Sprintf("性別が %s に一致しました", strings.ToUpper(condition.Values[0])),
 				MessageEN: fmt.Sprintf("sex matched %s", strings.ToUpper(condition.Values[0])),
-			}
+			}, nil
 		}
 		return false, domain.ReasonEntry{
 			Code:      "SEX_MISMATCH",
 			Message:   fmt.Sprintf("性別 %s は %s と一致しません", input.Sex, strings.ToUpper(condition.Values[0])),
 			MessageEN: fmt.Sprintf("sex %s did not equal %s", input.Sex, strings.ToUpper(condition.Values[0])),
-		}
+		}, nil
 	case "age":
+		if input.Age == nil {
+			return false, domain.ReasonEntry{
+				Code:      "AGE_MISSING",
+				Message:   "年齢が入力されていません",
+				MessageEN: "age is missing",
+			}, nil
+		}
+		if condition.IntValue == nil {
+			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_AGE_CONDITION", "年齢条件の定義が未対応です", "unsupported age condition")
+		}
 		switch condition.Operator {
 		case "gte":
-			if input.Age >= condition.IntValue {
+			if *input.Age >= *condition.IntValue {
 				return true, domain.ReasonEntry{
 					Code:      "AGE_GTE_MATCH",
-					Message:   fmt.Sprintf("年齢 %d は %d 以上です", input.Age, condition.IntValue),
-					MessageEN: fmt.Sprintf("age %d >= %d", input.Age, condition.IntValue),
-				}
+					Message:   fmt.Sprintf("年齢 %d は %d 以上です", *input.Age, *condition.IntValue),
+					MessageEN: fmt.Sprintf("age %d >= %d", *input.Age, *condition.IntValue),
+				}, nil
 			}
 			return false, domain.ReasonEntry{
 				Code:      "AGE_GTE_MISMATCH",
-				Message:   fmt.Sprintf("年齢 %d は %d 未満です", input.Age, condition.IntValue),
-				MessageEN: fmt.Sprintf("age %d < %d", input.Age, condition.IntValue),
-			}
+				Message:   fmt.Sprintf("年齢 %d は %d 未満です", *input.Age, *condition.IntValue),
+				MessageEN: fmt.Sprintf("age %d < %d", *input.Age, *condition.IntValue),
+			}, nil
 		case "lte":
-			if input.Age <= condition.IntValue {
+			if *input.Age <= *condition.IntValue {
 				return true, domain.ReasonEntry{
 					Code:      "AGE_LTE_MATCH",
-					Message:   fmt.Sprintf("年齢 %d は %d 以下です", input.Age, condition.IntValue),
-					MessageEN: fmt.Sprintf("age %d <= %d", input.Age, condition.IntValue),
-				}
+					Message:   fmt.Sprintf("年齢 %d は %d 以下です", *input.Age, *condition.IntValue),
+					MessageEN: fmt.Sprintf("age %d <= %d", *input.Age, *condition.IntValue),
+				}, nil
 			}
 			return false, domain.ReasonEntry{
 				Code:      "AGE_LTE_MISMATCH",
-				Message:   fmt.Sprintf("年齢 %d は %d を超えています", input.Age, condition.IntValue),
-				MessageEN: fmt.Sprintf("age %d > %d", input.Age, condition.IntValue),
-			}
+				Message:   fmt.Sprintf("年齢 %d は %d を超えています", *input.Age, *condition.IntValue),
+				MessageEN: fmt.Sprintf("age %d > %d", *input.Age, *condition.IntValue),
+			}, nil
 		default:
-			return false, unsupportedReason("UNSUPPORTED_AGE_CONDITION", "年齢条件の定義が未対応です", "unsupported age condition")
+			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_AGE_CONDITION", "年齢条件の定義が未対応です", "unsupported age condition")
 		}
 	default:
-		return false, unsupportedReason("UNSUPPORTED_CONDITION_TYPE", fmt.Sprintf("条件種別 %q は未対応です", condition.Type), fmt.Sprintf("unsupported condition type %q", condition.Type))
+		return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_CONDITION_TYPE", fmt.Sprintf("条件種別 %q は未対応です", condition.Type), fmt.Sprintf("unsupported condition type %q", condition.Type))
 	}
 }
 
-func evaluateContainsAny(label string, actual []string, condition domain.Condition) (bool, domain.ReasonEntry) {
+func evaluateContainsAny(label string, actual []string, condition domain.Condition) (bool, domain.ReasonEntry, error) {
 	if condition.Operator != "contains_any" || len(condition.Values) == 0 {
-		return false, unsupportedReason(strings.ToUpper(label)+"_CONDITION_UNSUPPORTED", containsAnyUnsupportedMessage(label), fmt.Sprintf("unsupported %s condition", label))
+		return false, domain.ReasonEntry{}, newRuleDefinitionError(strings.ToUpper(label)+"_CONDITION_UNSUPPORTED", containsAnyUnsupportedMessage(label), fmt.Sprintf("unsupported %s condition", label))
 	}
 	for _, value := range condition.Values {
 		if slices.Contains(actual, value) {
@@ -210,21 +225,62 @@ func evaluateContainsAny(label string, actual []string, condition domain.Conditi
 				Code:      strings.ToUpper(singularReasonPrefix(label)) + "_MATCH",
 				Message:   fmt.Sprintf("%sに %s が含まれています", labelJa(label), value),
 				MessageEN: fmt.Sprintf("%s contains %s", label, value),
-			}
+			}, nil
 		}
 	}
 	return false, domain.ReasonEntry{
 		Code:      strings.ToUpper(singularReasonPrefix(label)) + "_MISMATCH",
 		Message:   fmt.Sprintf("%sに %s が含まれていません", labelJa(label), strings.Join(condition.Values, ", ")),
 		MessageEN: fmt.Sprintf("%s did not contain any of %s", label, strings.Join(condition.Values, ", ")),
-	}
+	}, nil
 }
 
-func unsupportedReason(code, message, messageEN string) domain.ReasonEntry {
-	return domain.ReasonEntry{
-		Code:      code,
-		Message:   message,
-		MessageEN: messageEN,
+func validateConditionDefinition(condition domain.Condition) error {
+	switch condition.Type {
+	case "main_diagnosis", "sex":
+		if condition.Operator != "equals" || len(condition.Values) != 1 {
+			return newRuleDefinitionError("INVALID_EQUALS_CONDITION", fmt.Sprintf("%s 条件は equals と単一値が必要です", condition.Type), fmt.Sprintf("%s condition requires equals and a single value", condition.Type))
+		}
+	case "diagnoses", "procedures", "comorbidities":
+		if condition.Operator != "contains_any" || len(condition.Values) == 0 {
+			return newRuleDefinitionError("INVALID_CONTAINS_ANY_CONDITION", fmt.Sprintf("%s 条件は contains_any と 1 件以上の値が必要です", condition.Type), fmt.Sprintf("%s condition requires contains_any and at least one value", condition.Type))
+		}
+	case "age":
+		if condition.Operator != "gte" && condition.Operator != "lte" {
+			return newRuleDefinitionError("INVALID_AGE_CONDITION", "年齢条件は gte か lte が必要です", "age condition requires gte or lte")
+		}
+		if condition.IntValue == nil {
+			return newRuleDefinitionError("INVALID_AGE_CONDITION", "年齢条件には int_value が必要です", "age condition requires int_value")
+		}
+	default:
+		return newRuleDefinitionError("UNSUPPORTED_CONDITION_TYPE", fmt.Sprintf("条件種別 %q は未対応です", condition.Type), fmt.Sprintf("unsupported condition type %q", condition.Type))
+	}
+	return nil
+}
+
+type ruleDefinitionError struct {
+	reason domain.ReasonEntry
+}
+
+func (e *ruleDefinitionError) Error() string {
+	return e.reason.Message
+}
+
+func (e *ruleDefinitionError) Unwrap() error {
+	return ErrRuleDefinition
+}
+
+func (e *ruleDefinitionError) Reason() domain.ReasonEntry {
+	return e.reason
+}
+
+func newRuleDefinitionError(code, message, messageEN string) error {
+	return &ruleDefinitionError{
+		reason: domain.ReasonEntry{
+			Code:      code,
+			Message:   message,
+			MessageEN: messageEN,
+		},
 	}
 }
 

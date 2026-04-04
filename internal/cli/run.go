@@ -137,7 +137,16 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	}
 	defer cleanupOutput()
 
-	engine := evaluator.New(store.NewJSONRuleStore(*rulesPath))
+	ruleStore := store.NewJSONRuleStore(*rulesPath)
+	preloadedRuleSet, err := ruleStore.ReadRuleSet(ctx)
+	if err != nil {
+		return err
+	}
+	if err := evaluator.ValidateRuleSet(preloadedRuleSet); err != nil {
+		return err
+	}
+
+	engine := evaluator.New(fixedRuleStore{ruleSet: preloadedRuleSet})
 	scanner := bufio.NewScanner(reader)
 	encoder := json.NewEncoder(writer)
 	lineNo := 0
@@ -193,6 +202,12 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	engine := evaluator.New(store.NewJSONRuleStore(*rulesPath))
 	result, err := engine.Explain(ctx, input)
 	if err != nil {
+		if errors.Is(err, evaluator.ErrNoClassification) {
+			if writeErr := writeJSON(stdout, result); writeErr != nil {
+				return writeErr
+			}
+			return nil
+		}
 		return err
 	}
 
@@ -253,7 +268,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
 
-	ruleSet, err := store.NewJSONRuleStore(*rulesPath).LoadRuleSet(context.Background(), 2026)
+	ruleSet, err := store.NewJSONRuleStore(*rulesPath).ReadRuleSet(context.Background())
 	if err != nil {
 		return err
 	}
@@ -278,6 +293,17 @@ type batchErrorResult struct {
 	Code      string `json:"code"`
 	Message   string `json:"message"`
 	MessageEN string `json:"message_en,omitempty"`
+}
+
+type fixedRuleStore struct {
+	ruleSet domain.RuleSet
+}
+
+func (s fixedRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.RuleSet, error) {
+	if s.ruleSet.FiscalYear != fiscalYear {
+		return domain.RuleSet{}, fmt.Errorf("rule set fiscal year %d does not match requested %d", s.ruleSet.FiscalYear, fiscalYear)
+	}
+	return s.ruleSet, nil
 }
 
 func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
@@ -367,6 +393,12 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 			Message:   fmt.Sprintf("症例 %s に一致する分類が見つかりません", caseID),
 			MessageEN: fmt.Sprintf("no classification matched for case %s", caseID),
 		}
+	case errors.Is(err, evaluator.ErrRuleDefinition):
+		return &batchErrorResult{
+			Code:      "RULE_DEFINITION_ERROR",
+			Message:   fmt.Sprintf("ルール定義エラーが見つかりました: %v", err),
+			MessageEN: fmt.Sprintf("rule definition error: %v", err),
+		}
 	case errors.Is(err, os.ErrNotExist):
 		return &batchErrorResult{
 			Code:      "RULES_NOT_FOUND",
@@ -403,7 +435,7 @@ func writeJSON(w io.Writer, value any) error {
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "使い方: marume <コマンド> [フラグ]")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "DPC分類をローカルで試すためのCLIです。")
+	fmt.Fprintln(w, "DPC診断群分類をローカルで試すためのCLIです。")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "コマンド:")
 	fmt.Fprintln(w, "  classify   単一症例を分類する")

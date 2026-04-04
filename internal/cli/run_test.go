@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,6 +46,58 @@ func TestClassifyBatchはJSONLを1行ずつ処理する(t *testing.T) {
 	}
 	if !strings.Contains(lines[2], `"code":"INVALID_JSON"`) {
 		t.Fatalf("3 行目は JSON エラーを期待しましたが、実際は %s でした", lines[2])
+	}
+}
+
+func TestExplainは分類不能でも候補ルールをJSON出力する(t *testing.T) {
+	input := `{"case_id":"999","fiscal_year":2026,"main_diagnosis":"Z999","diagnoses":["Z999"],"procedures":[],"comorbidities":[]}`
+	rulesPath := testdataPath(t, "rules", "rules-2026.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"explain", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("explain でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("explain のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	if _, ok := result["candidate_rules"]; !ok {
+		t.Fatalf("candidate_rules を期待しましたが、実際の出力は %v でした", result)
+	}
+	if result["selected_rule"] != "" {
+		t.Fatalf("分類不能時の selected_rule は空を期待しましたが、実際は %v でした", result["selected_rule"])
+	}
+}
+
+func TestVersionは別年度ルールでもメタ情報を表示できる(t *testing.T) {
+	rulesPath := testdataPath(t, "rules", "rules-2027.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"version", "--rules", rulesPath},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("version でエラーが返りました: %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), `"rule_version": "2027.0.0-poc"`) {
+		t.Fatalf("2027 年度の rule_version を期待しましたが、実際の出力は %s でした", stdout.String())
 	}
 }
 

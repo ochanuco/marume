@@ -2,6 +2,7 @@ package evaluator_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/ochanuco/marume/internal/domain"
@@ -17,6 +18,7 @@ func (s stubStore) LoadRuleSet(_ context.Context, _ int) (domain.RuleSet, error)
 }
 
 func Test優先順位が最も高い一致ルールを採用する(t *testing.T) {
+	age := 72
 	engine := evaluator.New(stubStore{
 		ruleSet: domain.RuleSet{
 			FiscalYear:  2026,
@@ -46,6 +48,7 @@ func Test優先順位が最も高い一致ルールを採用する(t *testing.T)
 	result, err := engine.Classify(context.Background(), domain.CaseInput{
 		CaseID:        "123",
 		FiscalYear:    2026,
+		Age:           &age,
 		MainDiagnosis: "I219",
 		Procedures:    []string{"K549"},
 	})
@@ -70,6 +73,7 @@ func Test優先順位が最も高い一致ルールを採用する(t *testing.T)
 }
 
 func Test一致するルールがない場合は分類不能エラーを返す(t *testing.T) {
+	procedureAge := 75
 	engine := evaluator.New(stubStore{
 		ruleSet: domain.RuleSet{
 			FiscalYear:  2026,
@@ -91,13 +95,66 @@ func Test一致するルールがない場合は分類不能エラーを返す(t
 	result, err := engine.Explain(context.Background(), domain.CaseInput{
 		CaseID:        "123",
 		FiscalYear:    2026,
+		Age:           &procedureAge,
 		MainDiagnosis: "I219",
 		Procedures:    []string{"OTHER"},
 	})
 	if err != evaluator.ErrNoClassification {
 		t.Fatalf("ErrNoClassification を期待しましたが、実際は %v でした", err)
 	}
-	if len(result.CandidateRules) != 0 {
-		t.Fatalf("分類不能時の結果は空を期待しましたが、実際は %#v でした", result)
+	if len(result.CandidateRules) != 1 {
+		t.Fatalf("分類不能時も候補ルールは 1 件を期待しましたが、実際は %d 件でした", len(result.CandidateRules))
+	}
+	if result.CandidateRules[0].UnmatchedReason == nil {
+		t.Fatal("分類不能時も不一致理由が保持されることを期待しましたが、nil でした")
+	}
+}
+
+func Test未対応の条件定義はルール定義エラーとして返す(t *testing.T) {
+	engine := evaluator.New(stubStore{
+		ruleSet: domain.RuleSet{
+			FiscalYear:  2026,
+			RuleVersion: "2026.0.0-poc",
+			Rules: []domain.Rule{
+				{
+					ID:       "broken",
+					Priority: 10,
+					DPCCode:  "040080xx99x0xx",
+					Conditions: []domain.Condition{
+						{Type: "main_diagnosis", Operator: "contains_any", Values: []string{"I219"}},
+					},
+				},
+			},
+		},
+	})
+
+	_, err := engine.Classify(context.Background(), domain.CaseInput{
+		CaseID:        "123",
+		FiscalYear:    2026,
+		MainDiagnosis: "I219",
+	})
+	if !errors.Is(err, evaluator.ErrRuleDefinition) {
+		t.Fatalf("ErrRuleDefinition を期待しましたが、実際は %v でした", err)
+	}
+}
+
+func Testルールセット検証で未対応条件を事前に検出する(t *testing.T) {
+	ruleSet := domain.RuleSet{
+		FiscalYear: 2026,
+		Rules: []domain.Rule{
+			{
+				ID:       "broken",
+				Priority: 10,
+				DPCCode:  "040080xx99x0xx",
+				Conditions: []domain.Condition{
+					{Type: "age", Operator: "equals"},
+				},
+			},
+		},
+	}
+
+	err := evaluator.ValidateRuleSet(ruleSet)
+	if !errors.Is(err, evaluator.ErrRuleDefinition) {
+		t.Fatalf("ErrRuleDefinition を期待しましたが、実際は %v でした", err)
 	}
 }
