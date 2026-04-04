@@ -477,10 +477,15 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 			MessageEN: fmt.Sprintf("no classification matched for case %s", caseID),
 		}
 	case errors.Is(err, evaluator.ErrRuleDefinition):
+		messageEN := fmt.Sprintf("rule definition error: %v", err)
+		var reasoned interface{ Reason() domain.ReasonEntry }
+		if errors.As(err, &reasoned) && reasoned.Reason().MessageEN != "" {
+			messageEN = fmt.Sprintf("rule definition error: %s", reasoned.Reason().MessageEN)
+		}
 		return &batchErrorResult{
 			Code:      "RULE_DEFINITION_ERROR",
 			Message:   fmt.Sprintf("ルール定義エラーが見つかりました: %v", err),
-			MessageEN: fmt.Sprintf("rule definition error: %v", err),
+			MessageEN: messageEN,
 		}
 	case errors.Is(err, store.ErrFiscalYearMismatch):
 		return &batchErrorResult{
@@ -506,6 +511,8 @@ func validateCaseInput(input domain.CaseInput) error {
 		return fmt.Errorf("%w: case_id は必須です", errInvalidInput)
 	case input.FiscalYear <= 0:
 		return fmt.Errorf("%w: fiscal_year は必須です", errInvalidInput)
+	case input.Age != nil && *input.Age < 0:
+		return fmt.Errorf("%w: age は負の値を指定できません", errInvalidInput)
 	case input.MainDiagnosis == "":
 		return fmt.Errorf("%w: main_diagnosis は必須です", errInvalidInput)
 	}

@@ -269,6 +269,32 @@ func TestClassifyBatchは年度不一致を専用エラーコードで返す(t *
 	}
 }
 
+func TestClassifyは負の年齢を入力エラーとして返す(t *testing.T) {
+	age := -1
+	input := fmt.Sprintf(`{"case_id":"123","fiscal_year":2026,"age":%d,"main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}`, age)
+	rulesPath := testdataPath(t, "rules", "rules-2026.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("負の年齢では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("負の年齢の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(err.Error(), "age は負の値を指定できません") {
+		t.Fatalf("負の年齢のエラーメッセージが想定と異なります: %v", err)
+	}
+}
+
 func TestRulesPathが空文字なら入力エラーを返す(t *testing.T) {
 	input := `{"case_id":"123","fiscal_year":2026,"main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}`
 
