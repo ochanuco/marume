@@ -21,7 +21,10 @@ var (
 	errRuleRuntime  = errors.New("ルール実行エラー")
 )
 
-const defaultRulePath = "testdata/rules/rules-2026.json"
+const defaultRulePath = "rules/rules.json"
+
+// Version is the CLI version and may be overridden at build time with -ldflags.
+var Version = "dev"
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -276,7 +279,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 	}
 
 	return writeJSON(stdout, map[string]string{
-		"cli_version":  "0.1.0-poc",
+		"cli_version":  Version,
 		"rule_version": ruleSet.RuleVersion,
 		"build_id":     ruleSet.BuildID,
 		"built_at":     ruleSet.BuiltAt,
@@ -316,7 +319,7 @@ func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
 	defer cleanup()
 
 	var input domain.CaseInput
-	if err := json.NewDecoder(reader).Decode(&input); err != nil {
+	if err := decodeStrictJSON(reader, &input); err != nil {
 		return domain.CaseInput{}, fmt.Errorf("%w: JSONの読み込みに失敗しました: %v", errInvalidInput, err)
 	}
 	return input, nil
@@ -347,11 +350,8 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func(), error) {
 }
 
 func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo int, line []byte) batchClassifyResult {
-	decoder := json.NewDecoder(bytes.NewReader(line))
-	decoder.DisallowUnknownFields()
-
 	var input domain.CaseInput
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeStrictJSON(bytes.NewReader(line), &input); err != nil {
 		return batchClassifyResult{
 			LineNo: lineNo,
 			Status: "error",
@@ -388,6 +388,18 @@ func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo 
 	result.Status = "ok"
 	result.Result = &classified
 	return result
+}
+
+func decodeStrictJSON(reader io.Reader, target any) error {
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("unexpected trailing data")
+	}
+	return nil
 }
 
 func classifyBatchError(err error, caseID string) *batchErrorResult {

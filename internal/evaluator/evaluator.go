@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -14,18 +14,25 @@ import (
 var ErrNoClassification = errors.New("no classification matched")
 var ErrRuleDefinition = errors.New("rule definition error")
 
+// RuleStore loads a rule set for a requested fiscal year.
 type RuleStore interface {
 	LoadRuleSet(ctx context.Context, fiscalYear int) (domain.RuleSet, error)
 }
 
+// Evaluator applies rule sets to case input and produces classify/explain results.
 type Evaluator struct {
 	store RuleStore
 }
 
+// New constructs an Evaluator with a non-nil RuleStore.
 func New(store RuleStore) *Evaluator {
+	if isNilRuleStore(store) {
+		panic("evaluator: store cannot be nil")
+	}
 	return &Evaluator{store: store}
 }
 
+// ValidateRuleSet checks that a rule set is structurally evaluable before use.
 func ValidateRuleSet(ruleSet domain.RuleSet) error {
 	for _, rule := range ruleSet.Rules {
 		if len(rule.Conditions) == 0 {
@@ -40,6 +47,7 @@ func ValidateRuleSet(ruleSet domain.RuleSet) error {
 	return nil
 }
 
+// Classify evaluates all candidate rules, preserving the best match only if no definition error exists.
 func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domain.ClassificationResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
@@ -50,6 +58,9 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 	var definitionErr error
 
 	for _, rule := range sortRules(ruleSet.Rules) {
+		if err := ctx.Err(); err != nil {
+			return domain.ClassificationResult{}, err
+		}
 		matched, reasons, _, err := evaluateRule(input, rule)
 		if err != nil {
 			if definitionErr == nil {
@@ -78,6 +89,7 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 	return domain.ClassificationResult{}, ErrNoClassification
 }
 
+// Explain returns candidate-rule diagnostics and mirrors Classify's context/error behavior.
 func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain.ExplainResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
@@ -87,11 +99,18 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 	result := domain.ExplainResult{
 		CandidateRules: make([]domain.CandidateExplain, 0, len(ruleSet.Rules)),
 	}
+	var definitionErr error
 
 	for _, rule := range sortRules(ruleSet.Rules) {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		matched, reasons, mismatch, err := evaluateRule(input, rule)
 		if err != nil {
-			return result, err
+			if definitionErr == nil {
+				definitionErr = fmt.Errorf("rule %s: %w", rule.ID, err)
+			}
+			continue
 		}
 
 		candidate := domain.CandidateExplain{
@@ -110,6 +129,9 @@ func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain
 		result.CandidateRules = append(result.CandidateRules, candidate)
 	}
 
+	if definitionErr != nil {
+		return result, definitionErr
+	}
 	if result.SelectedRule == "" {
 		return result, ErrNoClassification
 	}
@@ -150,11 +172,12 @@ func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.Reas
 }
 
 func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool, domain.ReasonEntry, error) {
+	if err := validateConditionDefinition(condition); err != nil {
+		return false, domain.ReasonEntry{}, err
+	}
+
 	switch condition.Type {
 	case "main_diagnosis":
-		if condition.Operator != "equals" || len(condition.Values) != 1 {
-			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_MAIN_DIAGNOSIS_CONDITION", "主傷病名条件の定義が未対応です", "unsupported main_diagnosis condition")
-		}
 		if input.MainDiagnosis == condition.Values[0] {
 			return true, domain.ReasonEntry{
 				Code:      "MAIN_DIAGNOSIS_MATCH",
@@ -174,9 +197,6 @@ func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool
 	case "comorbidities":
 		return evaluateContainsAny("comorbidities", input.Comorbidities, condition)
 	case "sex":
-		if condition.Operator != "equals" || len(condition.Values) != 1 {
-			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_SEX_CONDITION", "性別条件の定義が未対応です", "unsupported sex condition")
-		}
 		if strings.EqualFold(input.Sex, condition.Values[0]) {
 			return true, domain.ReasonEntry{
 				Code:      "SEX_MATCH",
@@ -196,9 +216,6 @@ func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool
 				Message:   "年齢が入力されていません",
 				MessageEN: "age is missing",
 			}, nil
-		}
-		if condition.IntValue == nil {
-			return false, domain.ReasonEntry{}, newRuleDefinitionError("UNSUPPORTED_AGE_CONDITION", "年齢条件の定義が未対応です", "unsupported age condition")
 		}
 		switch condition.Operator {
 		case "gte":
@@ -239,8 +256,12 @@ func evaluateContainsAny(label string, actual []string, condition domain.Conditi
 	if condition.Operator != "contains_any" || len(condition.Values) == 0 {
 		return false, domain.ReasonEntry{}, newRuleDefinitionError(strings.ToUpper(label)+"_CONDITION_UNSUPPORTED", containsAnyUnsupportedMessage(label), fmt.Sprintf("unsupported %s condition", label))
 	}
+	actualSet := make(map[string]struct{}, len(actual))
+	for _, value := range actual {
+		actualSet[value] = struct{}{}
+	}
 	for _, value := range condition.Values {
-		if slices.Contains(actual, value) {
+		if _, ok := actualSet[value]; ok {
 			return true, domain.ReasonEntry{
 				Code:      strings.ToUpper(singularReasonPrefix(label)) + "_MATCH",
 				Message:   fmt.Sprintf("%sに %s が含まれています", labelJa(label), value),
@@ -253,6 +274,20 @@ func evaluateContainsAny(label string, actual []string, condition domain.Conditi
 		Message:   fmt.Sprintf("%sに %s が含まれていません", labelJa(label), strings.Join(condition.Values, ", ")),
 		MessageEN: fmt.Sprintf("%s did not contain any of %s", label, strings.Join(condition.Values, ", ")),
 	}, nil
+}
+
+func isNilRuleStore(store RuleStore) bool {
+	if store == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(store)
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 func validateConditionDefinition(condition domain.Condition) error {

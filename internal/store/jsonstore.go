@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/ochanuco/marume/internal/domain"
@@ -15,9 +17,13 @@ type JSONRuleStore struct {
 }
 
 func NewJSONRuleStore(path string) *JSONRuleStore {
+	if path == "" {
+		panic("jsonstore: path cannot be empty")
+	}
 	return &JSONRuleStore{path: path}
 }
 
+// ReadRuleSet reads a single strict JSON rule file without fiscal-year validation.
 func (s *JSONRuleStore) ReadRuleSet(_ context.Context) (domain.RuleSet, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
@@ -31,10 +37,14 @@ func (s *JSONRuleStore) ReadRuleSet(_ context.Context) (domain.RuleSet, error) {
 	if err := decoder.Decode(&ruleSet); err != nil {
 		return domain.RuleSet{}, fmt.Errorf("decode rule set: %w", err)
 	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return domain.RuleSet{}, fmt.Errorf("decode rule set: unexpected trailing data")
+	}
 
 	return ruleSet, nil
 }
 
+// LoadRuleSet reads a rule file and verifies that its fiscal year matches the requested year.
 func (s *JSONRuleStore) LoadRuleSet(ctx context.Context, fiscalYear int) (domain.RuleSet, error) {
 	ruleSet, err := s.ReadRuleSet(ctx)
 	if err != nil {
