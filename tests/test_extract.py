@@ -37,3 +37,4 @@ def test_manifestから正式版PDFを選んでルールCSVの雛形を作れる
     assert lines == [",".join(RULES_CSV_HEADERS)]
     metadata = json.loads(output_csv_path.with_suffix(".source.json").read_text(encoding="utf-8"))
     assert metadata["source_pdf"].endswith("dpc_official_20260318.pdf")
+    assert metadata["status"] == "scaffolded"

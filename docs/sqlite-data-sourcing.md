@@ -163,7 +163,7 @@ SQLite に直接生データを詰めるのではなく、先に BigQuery 側で
 4. ICD / 処置マスタは名称表示に必要な列だけに絞る
 5. SQLite にエクスポートする
 
-これで [README.md](/Users/chanu/ghq/github.com/ochanuco/marume/README.md#L85) の「Dataform / BigQuery 由来のスナップショット生成に接続する」と整合する。
+これで [README.md](../README.md) の「Dataform / BigQuery 由来のスナップショット生成に接続する」と整合する。
 
 ## POC の進め方
 

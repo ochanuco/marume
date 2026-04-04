@@ -12,7 +12,7 @@ def test_workflow_JSON初回実行ではCSV雛形を作って止まる(tmp_path:
     workflow_path.write_text(
         json.dumps(
             {
-                "source_url": "https://example.com/test-page.html",
+                "source_url": "https://example.com/mhlw_dpc_page.html",
                 "fiscal_year": 2026,
                 "paths": {
                     "raw_dir": str(tmp_path / "raw"),
@@ -28,7 +28,7 @@ def test_workflow_JSON初回実行ではCSV雛形を作って止まる(tmp_path:
 
     html = (fixture_dir / "mhlw_dpc_page.html").read_bytes()
     responses = {
-        "https://example.com/test-page.html": html,
+        "https://example.com/mhlw_dpc_page.html": html,
         "https://example.com/content/12404000/001234567.pdf": b"%PDF-provisional",
         "https://example.com/content/12404000/001234568.pdf": b"%PDF-official",
     }
@@ -49,7 +49,7 @@ def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
     workflow_path.write_text(
         json.dumps(
             {
-                "source_url": "https://example.com/test-page.html",
+                "source_url": "https://example.com/mhlw_dpc_page.html",
                 "fiscal_year": 2026,
                 "paths": {
                     "raw_dir": str(tmp_path / "raw"),
@@ -72,7 +72,7 @@ def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
 
     html = (fixture_dir / "mhlw_dpc_page.html").read_bytes()
     responses = {
-        "https://example.com/test-page.html": html,
+        "https://example.com/mhlw_dpc_page.html": html,
         "https://example.com/content/12404000/001234567.pdf": b"%PDF-provisional",
         "https://example.com/content/12404000/001234568.pdf": b"%PDF-official",
     }
