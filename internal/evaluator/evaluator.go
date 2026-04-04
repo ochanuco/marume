@@ -37,7 +37,19 @@ func New(store RuleStore) *Evaluator {
 
 // ValidateRuleSet checks that a rule set is structurally evaluable before use.
 func ValidateRuleSet(ruleSet domain.RuleSet) error {
+	if ruleSet.FiscalYear <= 0 {
+		return newRuleDefinitionError("INVALID_RULESET_FISCAL_YEAR", "ruleset の fiscal_year は 1 以上である必要があります", "ruleset fiscal_year must be >= 1")
+	}
+	if ruleSet.RuleVersion == "" {
+		return newRuleDefinitionError("MISSING_RULESET_VERSION", "ruleset の rule_version は必須です", "ruleset rule_version is required")
+	}
 	for _, rule := range ruleSet.Rules {
+		if rule.ID == "" {
+			return fmt.Errorf("rule <unknown>: %w", newRuleDefinitionError("MISSING_RULE_ID", "rule の id は必須です", "rule id is required"))
+		}
+		if rule.DPCCode == "" {
+			return fmt.Errorf("rule %s: %w", rule.ID, newRuleDefinitionError("MISSING_RULE_DPC_CODE", "rule の dpc_code は必須です", "rule dpc_code is required"))
+		}
 		if len(rule.Conditions) == 0 {
 			return fmt.Errorf("rule %s: %w", rule.ID, newRuleDefinitionError("NO_CONDITIONS_DEFINED", "ルールに条件が定義されていません", "no conditions defined for rule"))
 		}
@@ -54,6 +66,9 @@ func ValidateRuleSet(ruleSet domain.RuleSet) error {
 func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domain.ClassificationResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
+		return domain.ClassificationResult{}, err
+	}
+	if err := ValidateRuleSet(ruleSet); err != nil {
 		return domain.ClassificationResult{}, err
 	}
 
@@ -96,6 +111,9 @@ func (e *Evaluator) Classify(ctx context.Context, input domain.CaseInput) (domai
 func (e *Evaluator) Explain(ctx context.Context, input domain.CaseInput) (domain.ExplainResult, error) {
 	ruleSet, err := e.store.LoadRuleSet(ctx, input.FiscalYear)
 	if err != nil {
+		return domain.ExplainResult{}, err
+	}
+	if err := ValidateRuleSet(ruleSet); err != nil {
 		return domain.ExplainResult{}, err
 	}
 

@@ -11,7 +11,8 @@ import (
 func TestClassifyBatchErrorはルール定義エラーの英語メッセージを英語で返す(t *testing.T) {
 	negative := -1
 	err := evaluator.ValidateRuleSet(domain.RuleSet{
-		FiscalYear: 2026,
+		FiscalYear:  2026,
+		RuleVersion: "2026.0.0-poc",
 		Rules: []domain.Rule{
 			{
 				ID:       "invalid-age",
