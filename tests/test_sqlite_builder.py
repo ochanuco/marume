@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import sqlite3
 
-from marume_data.sqlite_builder import create_snapshot_database
 from marume_data.models import ICDMasterRow, ProcedureMasterRow, Rule, RuleCondition, RuleSet, Snapshot
+from marume_data.sqlite_builder import create_snapshot_database
 
 
-def test_create_snapshot_database_writes_minimum_tables(tmp_path) -> None:
+def test_SQLiteスナップショットの最小テーブルを書き込める(tmp_path) -> None:
     output_path = tmp_path / "rules-2026.sqlite"
     snapshot = Snapshot(
         rule_set=RuleSet(
@@ -61,17 +61,17 @@ def test_create_snapshot_database_writes_minimum_tables(tmp_path) -> None:
     create_snapshot_database(output_path, snapshot)
 
     with sqlite3.connect(output_path) as connection:
-        assert _count_rows(connection, "rule_sets") == 1
-        assert _count_rows(connection, "rules") == 1
-        assert _count_rows(connection, "rule_conditions") == 2
-        assert _count_rows(connection, "icd_master") == 1
-        assert _count_rows(connection, "procedure_master") == 1
-        assert _metadata_value(connection, "source") == "pytest"
+        assert _行数を数える(connection, "rule_sets") == 1
+        assert _行数を数える(connection, "rules") == 1
+        assert _行数を数える(connection, "rule_conditions") == 2
+        assert _行数を数える(connection, "icd_master") == 1
+        assert _行数を数える(connection, "procedure_master") == 1
+        assert _メタデータ値を取得する(connection, "source") == "pytest"
 
 
-def _count_rows(connection: sqlite3.Connection, table_name: str) -> int:
+def _行数を数える(connection: sqlite3.Connection, table_name: str) -> int:
     return connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
 
 
-def _metadata_value(connection: sqlite3.Connection, key: str) -> str:
+def _メタデータ値を取得する(connection: sqlite3.Connection, key: str) -> str:
     return connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()[0]
