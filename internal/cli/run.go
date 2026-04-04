@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/ochanuco/marume/internal/domain"
 	"github.com/ochanuco/marume/internal/evaluator"
@@ -133,6 +134,9 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 			return nil
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	if err := validateBatchPaths(*inputPath, *outputPath); err != nil {
+		return err
 	}
 
 	reader, cleanupInput, err := openInput(*inputPath, stdin)
@@ -477,6 +481,26 @@ func validateCaseInput(input domain.CaseInput) error {
 	case input.MainDiagnosis == "":
 		return fmt.Errorf("%w: main_diagnosis は必須です", errInvalidInput)
 	}
+	return nil
+}
+
+func validateBatchPaths(inputPath, outputPath string) error {
+	if inputPath == "-" || outputPath == "-" {
+		return nil
+	}
+
+	inputAbs, err := filepath.Abs(inputPath)
+	if err != nil {
+		return fmt.Errorf("%w: 入力パスの解決に失敗しました: %v", errInvalidInput, err)
+	}
+	outputAbs, err := filepath.Abs(outputPath)
+	if err != nil {
+		return fmt.Errorf("%w: 出力パスの解決に失敗しました: %v", errInvalidInput, err)
+	}
+	if inputAbs == outputAbs {
+		return fmt.Errorf("%w: input と output に同じファイルは指定できません", errInvalidInput)
+	}
+
 	return nil
 }
 
