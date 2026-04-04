@@ -139,16 +139,6 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	}
 	defer cleanupInput()
 
-	writer, cleanupOutput, err := openOutput(*outputPath, stdout)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := cleanupOutput(); retErr == nil && closeErr != nil {
-			retErr = fmt.Errorf("%w: バッチ結果のクローズに失敗しました: %v", errRuleRuntime, closeErr)
-		}
-	}()
-
 	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
@@ -160,6 +150,16 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	if err := evaluator.ValidateRuleSet(preloadedRuleSet); err != nil {
 		return err
 	}
+
+	writer, cleanupOutput, err := openOutput(*outputPath, stdout)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := cleanupOutput(); retErr == nil && closeErr != nil {
+			retErr = fmt.Errorf("%w: バッチ結果のクローズに失敗しました: %v", errRuleRuntime, closeErr)
+		}
+	}()
 
 	engine := evaluator.New(fixedRuleStore{ruleSet: preloadedRuleSet})
 	scanner := bufio.NewScanner(reader)

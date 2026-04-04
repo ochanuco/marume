@@ -154,6 +154,39 @@ func TestRulesPathが空文字なら入力エラーを返す(t *testing.T) {
 	}
 }
 
+func TestClassifyBatchはルール読み込み失敗時に既存出力を壊さない(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "result.jsonl")
+	original := "keep-me\n"
+	if err := os.WriteFile(outputPath, []byte(original), 0o644); err != nil {
+		t.Fatalf("事前出力ファイルの作成に失敗しました: %v", err)
+	}
+
+	inputPath := testdataPath(t, "cases", "cases.jsonl")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify-batch", "--input", inputPath, "--output", outputPath, "--rules", filepath.Join(tmpDir, "missing-rules.json")},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("ルール読み込み失敗を期待しましたが、エラーが返りませんでした")
+	}
+
+	got, readErr := os.ReadFile(outputPath)
+	if readErr != nil {
+		t.Fatalf("事後出力ファイルの読み込みに失敗しました: %v", readErr)
+	}
+	if string(got) != original {
+		t.Fatalf("ルール読み込み失敗時は既存出力を保持したいですが、実際は %q でした", string(got))
+	}
+}
+
 func testdataPath(t *testing.T, elems ...string) string {
 	t.Helper()
 
