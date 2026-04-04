@@ -61,17 +61,17 @@ def test_SQLiteスナップショットの最小テーブルを書き込める(t
     create_snapshot_database(output_path, snapshot)
 
     with sqlite3.connect(output_path) as connection:
-        assert _行数を数える(connection, "rule_sets") == 1
-        assert _行数を数える(connection, "rules") == 1
-        assert _行数を数える(connection, "rule_conditions") == 2
-        assert _行数を数える(connection, "icd_master") == 1
-        assert _行数を数える(connection, "procedure_master") == 1
-        assert _メタデータ値を取得する(connection, "source") == "pytest"
+        assert _count_rows(connection, "rule_sets") == 1
+        assert _count_rows(connection, "rules") == 1
+        assert _count_rows(connection, "rule_conditions") == 2
+        assert _count_rows(connection, "icd_master") == 1
+        assert _count_rows(connection, "procedure_master") == 1
+        assert _metadata_value(connection, "source") == "pytest"
 
 
-def _行数を数える(connection: sqlite3.Connection, table_name: str) -> int:
+def _count_rows(connection: sqlite3.Connection, table_name: str) -> int:
     return connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
 
 
-def _メタデータ値を取得する(connection: sqlite3.Connection, key: str) -> str:
+def _metadata_value(connection: sqlite3.Connection, key: str) -> str:
     return connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()[0]
