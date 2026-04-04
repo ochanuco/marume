@@ -1,2 +1,2 @@
-# marumeco
-dpc
+# marume
+DPC CLI
