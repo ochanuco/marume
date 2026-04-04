@@ -4,6 +4,8 @@ import argparse
 import urllib.request
 from pathlib import Path
 
+from marume_data.fetch import fetch_mhlw_dpc_assets
+
 
 DEFAULT_DPC_URL = "https://www.mhlw.go.jp/stf/newpage_67729.html"
 
@@ -22,11 +24,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = args.output_dir / "dpc-2026.html"
-    with urllib.request.urlopen(args.url) as response:  # noqa: S310
-        output_path.write_bytes(response.read())
-    print(output_path)
+    manifest = fetch_mhlw_dpc_assets(
+        output_dir=args.output_dir,
+        page_url=args.url,
+        url_reader=urllib.request.urlopen,  # noqa: S310
+    )
+    print(args.output_dir / manifest["page_path"])
+    for asset in manifest["assets"]:
+        print(args.output_dir / asset["path"])
     return 0
 
 
