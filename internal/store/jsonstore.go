@@ -12,10 +12,28 @@ import (
 	"github.com/ochanuco/marume/internal/domain"
 )
 
+// ErrFiscalYearMismatch indicates that the requested fiscal year differs from the loaded rule set.
+var ErrFiscalYearMismatch = errors.New("fiscal year mismatch")
+
+// FiscalYearMismatchError reports the actual and requested fiscal years for rule selection.
+type FiscalYearMismatchError struct {
+	RuleSetFiscalYear int
+	RequestedYear     int
+}
+
+func (e FiscalYearMismatchError) Error() string {
+	return fmt.Sprintf("rule set fiscal year %d does not match requested %d", e.RuleSetFiscalYear, e.RequestedYear)
+}
+
+func (e FiscalYearMismatchError) Unwrap() error {
+	return ErrFiscalYearMismatch
+}
+
 type JSONRuleStore struct {
 	path string
 }
 
+// NewJSONRuleStore creates a strict JSON-backed rule store for a single rule snapshot file.
 func NewJSONRuleStore(path string) (*JSONRuleStore, error) {
 	if path == "" {
 		return nil, fmt.Errorf("jsonstore: path cannot be empty")
@@ -51,7 +69,10 @@ func (s *JSONRuleStore) LoadRuleSet(ctx context.Context, fiscalYear int) (domain
 		return domain.RuleSet{}, err
 	}
 	if ruleSet.FiscalYear != fiscalYear {
-		return domain.RuleSet{}, fmt.Errorf("rule set fiscal year %d does not match requested %d", ruleSet.FiscalYear, fiscalYear)
+		return domain.RuleSet{}, FiscalYearMismatchError{
+			RuleSetFiscalYear: ruleSet.FiscalYear,
+			RequestedYear:     fiscalYear,
+		}
 	}
 
 	return ruleSet, nil

@@ -61,6 +61,8 @@ func ExitCode(err error) int {
 		return 0
 	case errors.Is(err, errInvalidInput):
 		return 1
+	case errors.Is(err, store.ErrFiscalYearMismatch):
+		return 1
 	case errors.Is(err, evaluator.ErrNoClassification):
 		return 2
 	case errors.Is(err, os.ErrNotExist):
@@ -91,6 +93,9 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 			return nil
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	if err := rejectExtraArgs(flags); err != nil {
+		return err
 	}
 
 	input, err := loadCaseInput(*inputPath, stdin)
@@ -134,6 +139,9 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 			return nil
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	if err := rejectExtraArgs(flags); err != nil {
+		return err
 	}
 	if err := validateBatchPaths(*inputPath, *outputPath); err != nil {
 		return err
@@ -219,6 +227,9 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
+	if err := rejectExtraArgs(flags); err != nil {
+		return err
+	}
 
 	input, err := loadCaseInput(*inputPath, stdin)
 	if err != nil {
@@ -269,6 +280,9 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) error
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
+	if err := rejectExtraArgs(flags); err != nil {
+		return err
+	}
 
 	input, err := loadCaseInput(*inputPath, stdin)
 	if err != nil {
@@ -302,6 +316,9 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	if err := rejectExtraArgs(flags); err != nil {
+		return err
 	}
 
 	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
@@ -350,7 +367,10 @@ type fixedRuleStore struct {
 
 func (s fixedRuleStore) LoadRuleSet(_ context.Context, fiscalYear int) (domain.RuleSet, error) {
 	if s.ruleSet.FiscalYear != fiscalYear {
-		return domain.RuleSet{}, fmt.Errorf("rule set fiscal year %d does not match requested %d", s.ruleSet.FiscalYear, fiscalYear)
+		return domain.RuleSet{}, store.FiscalYearMismatchError{
+			RuleSetFiscalYear: s.ruleSet.FiscalYear,
+			RequestedYear:     fiscalYear,
+		}
 	}
 	return s.ruleSet, nil
 }
@@ -460,6 +480,12 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 			Message:   fmt.Sprintf("ルール定義エラーが見つかりました: %v", err),
 			MessageEN: fmt.Sprintf("rule definition error: %v", err),
 		}
+	case errors.Is(err, store.ErrFiscalYearMismatch):
+		return &batchErrorResult{
+			Code:      "FISCAL_YEAR_MISMATCH",
+			Message:   fmt.Sprintf("ルール年度と症例年度が一致しません: %v", err),
+			MessageEN: fmt.Sprintf("rule fiscal year does not match case fiscal year: %v", err),
+		}
 	default:
 		return &batchErrorResult{
 			Code:      "CLASSIFICATION_ERROR",
@@ -500,8 +526,29 @@ func validateBatchPaths(inputPath, outputPath string) error {
 	if inputAbs == outputAbs {
 		return fmt.Errorf("%w: input と output に同じファイルは指定できません", errInvalidInput)
 	}
+	inputInfo, err := os.Stat(inputAbs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("%w: 入力パスの確認に失敗しました: %v", errInvalidInput, err)
+	}
+	outputInfo, err := os.Stat(outputAbs)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w: 出力パスの確認に失敗しました: %v", errInvalidInput, err)
+	}
+	if err == nil && os.SameFile(inputInfo, outputInfo) {
+		return fmt.Errorf("%w: input と output に同じファイルは指定できません", errInvalidInput)
+	}
 
 	return nil
+}
+
+func rejectExtraArgs(flags *flag.FlagSet) error {
+	if flags.NArg() == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: 余分な引数があります: %v", errInvalidInput, flags.Args())
 }
 
 func writeJSON(w io.Writer, value any) error {
