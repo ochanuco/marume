@@ -36,17 +36,55 @@ func TestClassifyBatchはJSONLを1行ずつ処理する(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("出力行数は 3 行を期待しましたが、実際は %d 行でした", len(lines))
 	}
-	if !strings.Contains(lines[0], `"status":"ok"`) {
-		t.Fatalf("1 行目は成功を期待しましたが、実際は %s でした", lines[0])
+
+	var line1 map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &line1); err != nil {
+		t.Fatalf("1 行目のJSONを読み取れませんでした: %v", err)
 	}
-	if !strings.Contains(lines[0], `"message":"主傷病名が I219 に一致しました"`) {
-		t.Fatalf("1 行目の理由メッセージが想定と異なります: %s", lines[0])
+	if line1["status"] != "ok" {
+		t.Fatalf("1 行目は成功を期待しましたが、実際は %v でした", line1["status"])
 	}
-	if !strings.Contains(lines[1], `"status":"error"`) || !strings.Contains(lines[1], `"code":"NO_CLASSIFICATION"`) {
-		t.Fatalf("2 行目は分類不能エラーを期待しましたが、実際は %s でした", lines[1])
+	result, ok := line1["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("1 行目の result を期待しましたが、実際は %v でした", line1)
 	}
-	if !strings.Contains(lines[2], `"code":"INVALID_JSON"`) {
-		t.Fatalf("3 行目は JSON エラーを期待しましたが、実際は %s でした", lines[2])
+	reasons, ok := result["reasons"].([]any)
+	if !ok || len(reasons) == 0 {
+		t.Fatalf("1 行目の reasons を期待しましたが、実際は %v でした", result["reasons"])
+	}
+	firstReason, ok := reasons[0].(map[string]any)
+	if !ok {
+		t.Fatalf("1 行目の最初の reason を期待しましたが、実際は %v でした", reasons[0])
+	}
+	if firstReason["message"] != "主傷病名が I219 に一致しました" {
+		t.Fatalf("1 行目の理由メッセージが想定と異なります: %v", firstReason["message"])
+	}
+
+	var line2 map[string]any
+	if err := json.Unmarshal([]byte(lines[1]), &line2); err != nil {
+		t.Fatalf("2 行目のJSONを読み取れませんでした: %v", err)
+	}
+	if line2["status"] != "error" {
+		t.Fatalf("2 行目は error を期待しましたが、実際は %v でした", line2["status"])
+	}
+	line2Err, ok := line2["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("2 行目の error を期待しましたが、実際は %v でした", line2["error"])
+	}
+	if line2Err["code"] != "NO_CLASSIFICATION" {
+		t.Fatalf("2 行目は NO_CLASSIFICATION を期待しましたが、実際は %v でした", line2Err["code"])
+	}
+
+	var line3 map[string]any
+	if err := json.Unmarshal([]byte(lines[2]), &line3); err != nil {
+		t.Fatalf("3 行目のJSONを読み取れませんでした: %v", err)
+	}
+	line3Err, ok := line3["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("3 行目の error を期待しましたが、実際は %v でした", line3["error"])
+	}
+	if line3Err["code"] != "INVALID_JSON" {
+		t.Fatalf("3 行目は INVALID_JSON を期待しましたが、実際は %v でした", line3Err["code"])
 	}
 }
 
