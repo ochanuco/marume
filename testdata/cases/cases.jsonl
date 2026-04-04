@@ -1,0 +1,3 @@
+{"case_id":"123","fiscal_year":2026,"age":72,"sex":"M","main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}
+{"case_id":"999","fiscal_year":2026,"age":30,"sex":"F","main_diagnosis":"Z999","diagnoses":["Z999"],"procedures":[],"comorbidities":[]}
+{"case_id":"broken","fiscal_year":

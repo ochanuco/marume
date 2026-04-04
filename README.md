@@ -7,6 +7,7 @@ DPC 分類の Go 製 CLI POC です。データ基盤より先に、ローカル
 ## POC の範囲
 
 - `classify`: 単票分類
+- `classify-batch`: JSONL による一括分類
 - `explain`: 候補ルールと一致理由の確認
 - `validate`: 入力の最低限検証
 - `version`: CLI とルールセット情報の表示
@@ -22,12 +23,14 @@ go build ./cmd/marume
 
 ```bash
 ./marume classify --input testdata/cases/case-ok.json
+./marume classify-batch --input testdata/cases/cases.jsonl --output result.jsonl
 ./marume explain --input testdata/cases/case-age-only.json
 ./marume validate --input testdata/cases/case-ok.json
 ./marume version
 ```
 
 `stdin` から読む場合は `--input -` を使います。
+`classify-batch` は `JSONL` を 1 行ずつ読み、結果も `JSONL` で返します。
 
 ## 現在の構造
 
@@ -40,6 +43,6 @@ go build ./cmd/marume
 ## 次の差し替えポイント
 
 1. `internal/store` に SQLite 実装を追加
-2. `classify-batch` を追加
-3. `validate` を JSON Schema か独自ルールで強化
+2. `validate` を JSON Schema か独自ルールで強化
+3. SQLite ストアに差し替える
 4. Cobra ベースのコマンド体系に移行

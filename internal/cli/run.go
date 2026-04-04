@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,6 +36,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	switch args[0] {
 	case "classify":
 		return runClassify(ctx, args[1:], stdin, stdout, stderr)
+	case "classify-batch":
+		return runClassifyBatch(ctx, args[1:], stdin, stdout, stderr)
 	case "explain":
 		return runExplain(ctx, args[1:], stdin, stdout, stderr)
 	case "validate":
@@ -98,6 +101,64 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 	}
 
 	return writeJSON(stdout, result)
+}
+
+func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("classify-batch", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() {
+		fmt.Fprintln(stderr, "使い方: marume classify-batch --input <症例JSONL> [--output <結果JSONL>]")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "複数症例を1行ずつ分類し、結果をJSONLで返します。")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "フラグ:")
+		flags.PrintDefaults()
+	}
+
+	inputPath := flags.String("input", "-", "入力JSONLファイルのパス。標準入力を使う場合は -")
+	outputPath := flags.String("output", "-", "出力JSONLファイルのパス。標準出力に出す場合は -")
+	rulesPath := flags.String("rules", defaultRulePath, "ルールセットJSONのパス")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+
+	reader, cleanupInput, err := openInput(*inputPath, stdin)
+	if err != nil {
+		return err
+	}
+	defer cleanupInput()
+
+	writer, cleanupOutput, err := openOutput(*outputPath, stdout)
+	if err != nil {
+		return err
+	}
+	defer cleanupOutput()
+
+	engine := evaluator.New(store.NewJSONRuleStore(*rulesPath))
+	scanner := bufio.NewScanner(reader)
+	encoder := json.NewEncoder(writer)
+	lineNo := 0
+
+	for scanner.Scan() {
+		lineNo++
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		result := classifyBatchLine(ctx, engine, lineNo, line)
+		if err := encoder.Encode(result); err != nil {
+			return fmt.Errorf("%w: バッチ結果の書き込みに失敗しました: %v", errRuleRuntime, err)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("%w: JSONLの読み込みに失敗しました: %v", errInvalidInput, err)
+	}
+
+	return nil
 }
 
 func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -205,24 +266,120 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 	})
 }
 
+type batchClassifyResult struct {
+	LineNo int                          `json:"line_no"`
+	CaseID string                       `json:"case_id,omitempty"`
+	Status string                       `json:"status"`
+	Result *domain.ClassificationResult `json:"result,omitempty"`
+	Error  *batchErrorResult            `json:"error,omitempty"`
+}
+
+type batchErrorResult struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	MessageEN string `json:"message_en,omitempty"`
+}
+
 func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
-	var reader io.Reader
-	if path == "-" {
-		reader = stdin
-	} else {
-		file, err := os.Open(path)
-		if err != nil {
-			return domain.CaseInput{}, err
-		}
-		defer file.Close()
-		reader = file
+	reader, cleanup, err := openInput(path, stdin)
+	if err != nil {
+		return domain.CaseInput{}, err
 	}
+	defer cleanup()
 
 	var input domain.CaseInput
 	if err := json.NewDecoder(reader).Decode(&input); err != nil {
 		return domain.CaseInput{}, fmt.Errorf("%w: JSONの読み込みに失敗しました: %v", errInvalidInput, err)
 	}
 	return input, nil
+}
+
+func openInput(path string, stdin io.Reader) (io.Reader, func(), error) {
+	if path == "-" {
+		return stdin, func() {}, nil
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, func() { _ = file.Close() }, nil
+}
+
+func openOutput(path string, stdout io.Writer) (io.Writer, func(), error) {
+	if path == "-" {
+		return stdout, func() {}, nil
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, func() { _ = file.Close() }, nil
+}
+
+func classifyBatchLine(ctx context.Context, engine *evaluator.Evaluator, lineNo int, line []byte) batchClassifyResult {
+	var input domain.CaseInput
+	if err := json.Unmarshal(line, &input); err != nil {
+		return batchClassifyResult{
+			LineNo: lineNo,
+			Status: "error",
+			Error: &batchErrorResult{
+				Code:      "INVALID_JSON",
+				Message:   fmt.Sprintf("%d 行目のJSONが不正です", lineNo),
+				MessageEN: fmt.Sprintf("invalid JSON at line %d", lineNo),
+			},
+		}
+	}
+
+	result := batchClassifyResult{
+		LineNo: lineNo,
+		CaseID: input.CaseID,
+	}
+
+	if err := validateCaseInput(input); err != nil {
+		result.Status = "error"
+		result.Error = &batchErrorResult{
+			Code:      "INVALID_INPUT",
+			Message:   err.Error(),
+			MessageEN: "invalid input",
+		}
+		return result
+	}
+
+	classified, err := engine.Classify(ctx, input)
+	if err != nil {
+		result.Status = "error"
+		result.Error = classifyBatchError(err, input.CaseID)
+		return result
+	}
+
+	result.Status = "ok"
+	result.Result = &classified
+	return result
+}
+
+func classifyBatchError(err error, caseID string) *batchErrorResult {
+	switch {
+	case errors.Is(err, evaluator.ErrNoClassification):
+		return &batchErrorResult{
+			Code:      "NO_CLASSIFICATION",
+			Message:   fmt.Sprintf("症例 %s に一致する分類が見つかりません", caseID),
+			MessageEN: fmt.Sprintf("no classification matched for case %s", caseID),
+		}
+	case errors.Is(err, os.ErrNotExist):
+		return &batchErrorResult{
+			Code:      "RULES_NOT_FOUND",
+			Message:   "ルールセットファイルが見つかりません",
+			MessageEN: "rule set file not found",
+		}
+	default:
+		return &batchErrorResult{
+			Code:      "CLASSIFICATION_ERROR",
+			Message:   fmt.Sprintf("分類中にエラーが発生しました: %v", err),
+			MessageEN: fmt.Sprintf("classification error: %v", err),
+		}
+	}
 }
 
 func validateCaseInput(input domain.CaseInput) error {
@@ -250,12 +407,14 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "コマンド:")
 	fmt.Fprintln(w, "  classify   単一症例を分類する")
+	fmt.Fprintln(w, "  classify-batch 複数症例を一括分類する")
 	fmt.Fprintln(w, "  explain    候補ルールと判定理由を表示する")
 	fmt.Fprintln(w, "  validate   入力JSONを検証する")
 	fmt.Fprintln(w, "  version    CLIとルールセットのバージョンを表示する")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "例:")
 	fmt.Fprintln(w, "  marume classify --input case.json")
+	fmt.Fprintln(w, "  marume classify-batch --input cases.jsonl --output results.jsonl")
 	fmt.Fprintln(w, "  marume explain --input case.json")
 	fmt.Fprintln(w, "  marume validate --input case.json")
 	fmt.Fprintln(w, "  marume version")
