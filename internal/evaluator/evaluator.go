@@ -310,6 +310,9 @@ func validateConditionDefinition(condition domain.Condition) error {
 		if condition.IntValue == nil {
 			return newRuleDefinitionError("INVALID_AGE_CONDITION", "年齢条件には int_value が必要です", "age condition requires int_value")
 		}
+		if *condition.IntValue < 0 {
+			return newRuleDefinitionError("INVALID_AGE_CONDITION", "年齢条件の int_value は 0 以上である必要があります", "age condition int_value must be >= 0")
+		}
 	default:
 		return newRuleDefinitionError("UNSUPPORTED_CONDITION_TYPE", fmt.Sprintf("条件種別 %q は未対応です", condition.Type), fmt.Sprintf("unsupported condition type %q", condition.Type))
 	}
