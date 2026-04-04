@@ -36,7 +36,8 @@ uv sync
 
 ```bash
 uv run python scripts/fetch_mhlw.py --output-dir .local/raw/mhlw
-uv run python scripts/transform_dpc.py --input .local/raw/mhlw/dpc-2026.html --output .local/intermediate/dpc-2026.json
+uv run python scripts/extract_dpc_pdf.py --manifest .local/raw/mhlw/manifest.json --output .local/raw/mhlw/dpc_rules.csv
+uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --output .local/intermediate/dpc-2026.json
 uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
 ```
 
