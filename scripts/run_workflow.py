@@ -16,8 +16,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    config = load_workflow_config(args.workflow)
-    result = run_workflow(config, url_reader=_url_reader_with_timeout)  # noqa: S310
+    try:
+        config = load_workflow_config(args.workflow)
+        result = run_workflow(config, url_reader=_url_reader_with_timeout)  # noqa: S310
+    except FileNotFoundError as exc:
+        print(f"workflow 実行に必要なファイルが見つかりません: {exc}")
+        return 1
+    except (KeyError, ValueError, json.JSONDecodeError) as exc:
+        print(f"workflow 設定または入力が不正です: {exc}")
+        return 1
+    except Exception as exc:
+        print(f"workflow 実行に失敗しました: {exc}")
+        return 1
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

@@ -47,10 +47,17 @@ def run_workflow(config: WorkflowConfig, url_reader: URLReader) -> dict[str, str
         url_reader=url_reader,
     )
     manifest_path = config.paths.raw_dir / "manifest.json"
-    scaffold_rules_csv_from_manifest(
-        manifest_path=manifest_path,
-        output_csv_path=config.paths.rules_csv,
-    )
+    if not _rules_csv_has_data(config.paths.rules_csv):
+        if not config.paths.rules_csv.exists():
+            scaffold_rules_csv_from_manifest(
+                manifest_path=manifest_path,
+                output_csv_path=config.paths.rules_csv,
+            )
+        return {
+            "status": "needs_rules_csv",
+            "manifest": str(manifest_path),
+            "rules_csv": str(config.paths.rules_csv),
+        }
 
     html = (config.paths.raw_dir / str(manifest["page_path"])).read_text(encoding="utf-8")
     metadata = parse_mhlw_dpc_page(html=html, base_url=config.source_url)
@@ -65,8 +72,16 @@ def run_workflow(config: WorkflowConfig, url_reader: URLReader) -> dict[str, str
     snapshot = load_snapshot_json(config.paths.snapshot_json)
     create_snapshot_database(config.paths.sqlite_output, snapshot)
     return {
+        "status": "completed",
         "manifest": str(manifest_path),
         "rules_csv": str(config.paths.rules_csv),
         "snapshot_json": str(config.paths.snapshot_json),
         "sqlite_output": str(config.paths.sqlite_output),
     }
+
+
+def _rules_csv_has_data(path: Path) -> bool:
+    if not path.exists():
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return len(lines) > 1
