@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TypeAlias
 
 import pytest
 
@@ -20,11 +19,13 @@ class FakeResponse:
         return self._body
 
 
-FakeURLReader: TypeAlias = Callable[[str], FakeResponse]
+type FakeURLReader = Callable[[str], FakeResponse]
 
 
 def build_fake_url_reader(responses: dict[str, bytes]) -> FakeURLReader:
     def _reader(url: str) -> FakeResponse:
+        if url not in responses:
+            raise KeyError(f"build_fake_url_reader: response is not defined for URL: {url}")
         return FakeResponse(responses[url])
 
     return _reader

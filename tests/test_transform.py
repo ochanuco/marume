@@ -82,6 +82,34 @@ def test_DPCルールCSVからrulesとconditionsを組み立てられる() -> No
     assert rows[1].main_diagnosis == "K703"
 
 
+def test_DPCルールCSVの必須列不足を検出できる(tmp_path: Path) -> None:
+    csv_path = tmp_path / "invalid.csv"
+    csv_path.write_text("rule_id,priority\nR-1,1\n", encoding="utf-8")
+
+    try:
+        parse_dpc_rules_csv(csv_path)
+    except ValueError as exc:
+        assert "parse_dpc_rules_csv: missing required columns: dpc_code" == str(exc)
+    else:
+        raise AssertionError("ValueError was not raised")
+
+
+def test_DPCルールCSVの不正行を行番号付きで報告できる(tmp_path: Path) -> None:
+    csv_path = tmp_path / "invalid-row.csv"
+    csv_path.write_text(
+        "rule_id,priority,dpc_code\nR-1,not-a-number,010010xx99x0xx\n",
+        encoding="utf-8",
+    )
+
+    try:
+        parse_dpc_rules_csv(csv_path)
+    except ValueError as exc:
+        assert "parse_dpc_rules_csv: row 2 is invalid" in str(exc)
+        assert "not-a-number" in str(exc)
+    else:
+        raise AssertionError("ValueError was not raised")
+
+
 def test_厚労省ページとCSVからrules入りsnapshot_JSONを書き出せる(tmp_path: Path) -> None:
     output_path = tmp_path / "dpc-2026-rules.json"
     html = _html_fixture_path().read_text(encoding="utf-8")

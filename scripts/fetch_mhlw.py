@@ -30,5 +30,7 @@ def main() -> int:
     for asset in manifest["assets"]:
         print(args.output_dir / asset["path"])
     return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

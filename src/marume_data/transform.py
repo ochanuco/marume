@@ -164,24 +164,37 @@ def parse_mhlw_dpc_page(html: str, base_url: str) -> DPCPageMetadata:
 def parse_dpc_rules_csv(path: Path) -> list[DPCFlatRuleRow]:
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
-        rows = []
-        for raw in reader:
-            procedures = [
-                item
-                for item in (_normalize_space(part) for part in (raw.get("procedures") or "").split("|"))
-                if item
-            ]
-            rows.append(
-                DPCFlatRuleRow(
-                    rule_id=raw["rule_id"],
-                    priority=int(raw["priority"]),
-                    dpc_code=raw["dpc_code"],
-                    mdc_code=raw.get("mdc_code") or None,
-                    label=raw.get("label") or None,
-                    main_diagnosis=raw.get("main_diagnosis") or None,
-                    procedures=procedures,
-                )
+        fieldnames = reader.fieldnames or []
+        required_columns = {"rule_id", "priority", "dpc_code"}
+        missing_columns = sorted(required_columns - set(fieldnames))
+        if missing_columns:
+            raise ValueError(
+                "parse_dpc_rules_csv: missing required columns: "
+                + ", ".join(missing_columns)
             )
+        rows = []
+        for row_number, raw in enumerate(reader, start=2):
+            try:
+                procedures = [
+                    item
+                    for item in (_normalize_space(part) for part in (raw.get("procedures") or "").split("|"))
+                    if item
+                ]
+                rows.append(
+                    DPCFlatRuleRow(
+                        rule_id=raw["rule_id"],
+                        priority=int(raw["priority"]),
+                        dpc_code=raw["dpc_code"],
+                        mdc_code=raw.get("mdc_code") or None,
+                        label=raw.get("label") or None,
+                        main_diagnosis=raw.get("main_diagnosis") or None,
+                        procedures=procedures,
+                    )
+                )
+            except (KeyError, ValueError) as exc:
+                raise ValueError(
+                    f"parse_dpc_rules_csv: row {row_number} is invalid: {raw}: {exc}"
+                ) from exc
     return rows
 
 

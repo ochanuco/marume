@@ -6,7 +6,7 @@ from pathlib import Path
 from marume_data.extract import RULES_CSV_HEADERS, scaffold_rules_csv_from_manifest, scaffold_rules_csv_from_pdf
 
 
-def test_正式版PDFからルールCSVの雛形を作れる(tmp_path) -> None:
+def test_正式版PDFからルールCSVの雛形を作れる(tmp_path: Path) -> None:
     pdf_path = tmp_path / "dpc_official_20260318.pdf"
     pdf_path.write_bytes(b"%PDF-official")
     output_csv_path = tmp_path / "dpc_rules.csv"

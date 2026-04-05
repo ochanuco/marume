@@ -30,7 +30,7 @@ def main() -> int:
         print(f"SQLite 生成に失敗しました: {args.output}: {exc}")
         return 1
     except Exception as exc:
-        print(f"SQLite 生成に失敗しました: {args.output}: {exc}")
+        print(f"予期しないエラーが発生しました: {args.output}: {exc}")
         return 1
     print(args.output)
     return 0
