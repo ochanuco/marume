@@ -14,6 +14,7 @@ import (
 
 	"github.com/ochanuco/marume/internal/cli"
 	"github.com/ochanuco/marume/internal/store"
+	"github.com/ochanuco/marume/internal/testutil"
 )
 
 func TestClassifyBatchはJSONLを1行ずつ処理する(t *testing.T) {
@@ -144,6 +145,89 @@ func TestVersionは別年度ルールでもメタ情報を表示できる(t *tes
 	}
 	if result["rule_version"] != "2027.0.0-poc" {
 		t.Fatalf("2027 年度の rule_version を期待しましたが、実際は %v でした", result["rule_version"])
+	}
+}
+
+func TestClassifyはSQLiteスナップショットも読める(t *testing.T) {
+	input := `{"case_id":"123","fiscal_year":2026,"main_diagnosis":"I219","diagnoses":["I219"],"procedures":["K549"],"comorbidities":[]}`
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"classify", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("SQLite classify でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("SQLite classify のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	if result["dpc_code"] != "040080xx99x0xx" {
+		t.Fatalf("SQLite classify の dpc_code は 040080xx99x0xx を期待しましたが、実際は %v でした", result["dpc_code"])
+	}
+}
+
+func TestExplainはSQLiteスナップショットでも候補ルールを返す(t *testing.T) {
+	input := `{"case_id":"999","fiscal_year":2026,"main_diagnosis":"Z999","diagnoses":["Z999"],"procedures":[],"comorbidities":[]}`
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"explain", "--input", "-", "--rules", rulesPath},
+		strings.NewReader(input),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("SQLite explain でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("SQLite explain のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	if _, ok := result["candidate_rules"]; !ok {
+		t.Fatalf("SQLite explain は candidate_rules を期待しましたが、実際は %v でした", result)
+	}
+}
+
+func TestVersionはSQLiteスナップショットのメタ情報も表示できる(t *testing.T) {
+	rulesPath := sqliteRulesPath(t, "rules-2027.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"version", "--rules", rulesPath},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("SQLite version でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("SQLite version のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	if result["rule_version"] != "2027.0.0-poc" {
+		t.Fatalf("SQLite version の rule_version は 2027.0.0-poc を期待しましたが、実際は %v でした", result["rule_version"])
+	}
+	if result["built_at"] == "" {
+		t.Fatalf("SQLite version の built_at は空でないことを期待しましたが、実際は %v でした", result["built_at"])
 	}
 }
 
@@ -588,4 +672,15 @@ func testdataPath(t *testing.T, elems ...string) string {
 	}
 
 	return path
+}
+
+func sqliteRulesPath(t *testing.T, fixtureName string) string {
+	t.Helper()
+
+	jsonPath := testdataPath(t, "rules", fixtureName)
+	sqlitePath := filepath.Join(t.TempDir(), strings.TrimSuffix(fixtureName, filepath.Ext(fixtureName))+".sqlite")
+	if err := testutil.WriteSQLiteRuleSetFromJSON(jsonPath, sqlitePath); err != nil {
+		t.Fatalf("SQLite fixture の作成に失敗しました: %v", err)
+	}
+	return sqlitePath
 }
