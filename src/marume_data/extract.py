@@ -41,7 +41,7 @@ def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path)
 
     source_path = resolve_latest_asset_path(manifest_path, kind="official")
     if source_path is None:
-        raise FileNotFoundError("official DPC workbook was not found in manifest")
+        raise ValueError("official DPC workbook was not found in manifest")
     if source_path.suffix.lower() not in WORKBOOK_SUFFIXES:
         raise ValueError(f"official DPC workbook is required, but got: {source_path.name}")
     return scaffold_rules_csv_from_workbook(workbook_path=source_path, output_csv_path=output_csv_path)
@@ -156,6 +156,8 @@ def _load_first_icd_by_classification(sheet: Worksheet | ReadOnlyWorksheet) -> d
         )
         if not mdc_code or not classification_code or not icd_code:
             continue
+        mdc_code = mdc_code.zfill(2)
+        classification_code = classification_code.zfill(4)
         mapping.setdefault((mdc_code, classification_code), icd_code)
     return mapping
 
