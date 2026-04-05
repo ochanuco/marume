@@ -196,6 +196,10 @@ func evaluateRule(input domain.CaseInput, rule domain.Rule) (bool, []domain.Reas
 
 // evaluateCondition evaluates one normalized rule condition against a case input.
 func evaluateCondition(input domain.CaseInput, condition domain.Condition) (bool, domain.ReasonEntry, error) {
+	if err := validateConditionDefinition(condition); err != nil {
+		return false, domain.ReasonEntry{}, err
+	}
+
 	switch condition.Type {
 	case "main_diagnosis":
 		if input.MainDiagnosis == condition.Values[0] {
