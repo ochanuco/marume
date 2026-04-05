@@ -93,5 +93,11 @@ def _rules_csv_has_data(path: Path) -> bool:
 
     if not path.exists():
         return False
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return len(lines) > 1
+    with path.open(encoding="utf-8") as handle:
+        try:
+            next(handle)
+        except StopIteration:
+            return False
+        for _ in handle:
+            return True
+    return False

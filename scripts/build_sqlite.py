@@ -34,6 +34,9 @@ def main() -> int:
     except KeyError as exc:
         print(f"入力JSONに必須キーがありません: {args.input}: {exc}", file=sys.stderr)
         return 1
+    except TypeError as exc:
+        print(f"入力JSONの型が不正です: {args.input}: {exc}", file=sys.stderr)
+        return 1
     except sqlite3.Error as exc:
         print(f"SQLite 生成に失敗しました: {args.output}: {exc}", file=sys.stderr)
         return 1

@@ -85,7 +85,6 @@ def create_snapshot_database(output_path: Path, snapshot: Snapshot) -> None:
         _replace_icd_master(connection, snapshot.icd_master)
         _replace_procedure_master(connection, snapshot.procedure_master)
         _replace_metadata(connection, snapshot.metadata)
-        connection.commit()
 
 
 def load_snapshot_json(path: Path) -> Snapshot:
@@ -234,7 +233,7 @@ def _replace_metadata(connection: sqlite3.Connection, metadata: dict[str, str]) 
     connection.execute("DELETE FROM metadata")
     connection.executemany(
         "INSERT INTO metadata (key, value) VALUES (?, ?)",
-        [(key, value) for key, value in metadata.items()],
+        list(metadata.items()),
     )
 
 

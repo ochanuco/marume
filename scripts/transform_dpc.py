@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from marume_data.fetch import load_manifest, resolve_page_path, resolve_rules_csv_path
@@ -39,21 +40,36 @@ def main() -> int:
     args = parse_args()
     from marume_data.transform import parse_mhlw_dpc_page, write_snapshot_from_sources
 
-    input_path = _resolve_input_path(args.input, args.manifest)
-    rules_csv_path = args.rules_csv or _resolve_rules_csv(args.manifest)
-    source_url = _resolve_source_url(args.source_url, args.manifest)
-    html = input_path.read_text(encoding="utf-8")
-    metadata = parse_mhlw_dpc_page(
-        html=html,
-        base_url=source_url,
-    )
-    write_snapshot_from_sources(
-        output_path=args.output,
-        fiscal_year=args.fiscal_year,
-        source_url=source_url,
-        page_metadata=metadata,
-        rules_csv_path=rules_csv_path,
-    )
+    try:
+        input_path = _resolve_input_path(args.input, args.manifest)
+        if args.rules_csv is not None and not args.rules_csv.exists():
+            raise FileNotFoundError(args.rules_csv)
+        rules_csv_path = args.rules_csv or _resolve_rules_csv(args.manifest)
+        source_url = _resolve_source_url(args.source_url, args.manifest)
+        html = input_path.read_text(encoding="utf-8")
+        metadata = parse_mhlw_dpc_page(
+            html=html,
+            base_url=source_url,
+        )
+        write_snapshot_from_sources(
+            output_path=args.output,
+            fiscal_year=args.fiscal_year,
+            source_url=source_url,
+            page_metadata=metadata,
+            rules_csv_path=rules_csv_path,
+        )
+    except FileNotFoundError as exc:
+        print(f"入力ファイルが見つかりません: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"ファイル操作に失敗しました: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"入力値が不正です: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"snapshot 生成に失敗しました: {exc}", file=sys.stderr)
+        return 1
     print(args.output)
     return 0
 
