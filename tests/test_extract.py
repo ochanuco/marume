@@ -153,5 +153,5 @@ def test_dpc_codeが先頭6桁で始まらない行はスキップする(tmp_pat
     lines = output_csv_path.read_text(encoding="utf-8").splitlines()
     assert lines == [
         ",".join(RULES_CSV_HEADERS),
-        "R-010010-00002,10,010010xx9901xx,01,脳腫瘍,C700,",
+        "R-010010-00001,10,010010xx9901xx,01,脳腫瘍,C700,",
     ]

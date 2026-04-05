@@ -127,9 +127,10 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
             ) or dpc_code
             mdc_code, classification_code = dpc_code_parts
             main_diagnosis = icd_by_classification.get((mdc_code, classification_code), "")
+            rule_number = len(rows) + 1
             rows.append(
                 (
-                    f"R-{mdc_code}{classification_code}-{row_number:05d}",
+                    f"R-{mdc_code}{classification_code}-{rule_number:05d}",
                     priority,
                     dpc_code,
                     mdc_code,
