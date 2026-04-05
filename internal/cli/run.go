@@ -421,6 +421,8 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) 
 	if err != nil {
 		return nil, nil, err
 	}
+	// Close can surface deferred write/flush errors, so the caller must invoke
+	// and handle the returned close function.
 	return file, file.Close, nil
 }
 
