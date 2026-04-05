@@ -10,17 +10,23 @@ from marume_data.transform import DPCSourceLink, parse_mhlw_dpc_page
 
 
 class URLReaderResponse(Protocol):
+    """Minimal response interface required by fetch helpers."""
+
     def __enter__(self) -> URLReaderResponse: ...
     def __exit__(self, exc_type: object, exc: object, tb: object) -> bool | None: ...
     def read(self) -> bytes: ...
 
 
 class URLReader(Protocol):
+    """Callable that returns a context-managed byte response for a URL."""
+
     def __call__(self, url: str) -> URLReaderResponse: ...
 
 
 @dataclass(slots=True)
 class DownloadedAsset:
+    """One downloaded source asset recorded in the manifest."""
+
     kind: str
     label: str
     source_url: str
@@ -29,6 +35,8 @@ class DownloadedAsset:
 
 
 def fetch_mhlw_dpc_assets(output_dir: Path, page_url: str, url_reader: URLReader) -> dict[str, object]:
+    """Fetch the MHLW page and linked DPC PDFs into a raw asset directory."""
+
     output_dir.mkdir(parents=True, exist_ok=True)
     html_bytes = _read_bytes(url_reader, page_url)
     html_path = output_dir / "mhlw_dpc_page.html"
@@ -63,10 +71,14 @@ def fetch_mhlw_dpc_assets(output_dir: Path, page_url: str, url_reader: URLReader
 
 
 def load_manifest(manifest_path: Path) -> dict[str, object]:
+    """Load a manifest JSON file from disk."""
+
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
 def resolve_page_path(manifest_path: Path) -> Path:
+    """Resolve the fetched HTML page path recorded in a manifest."""
+
     manifest = load_manifest(manifest_path)
     page_path = manifest.get("page_path")
     if not page_path:
@@ -75,6 +87,8 @@ def resolve_page_path(manifest_path: Path) -> Path:
 
 
 def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
+    """Resolve a rules CSV path from manifest assets or the default raw path."""
+
     manifest = load_manifest(manifest_path)
     for asset in manifest.get("assets", []):
         path = str(asset.get("path", ""))
@@ -87,6 +101,8 @@ def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
 
 
 def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path | None:
+    """Resolve the newest PDF path of a given kind from a manifest."""
+
     manifest = load_manifest(manifest_path)
     matched_assets = [
         asset
@@ -100,6 +116,8 @@ def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path
 
 
 def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
+    """Download one linked PDF and return its manifest entry."""
+
     kind = _classify_link_kind(link.label)
     updated_suffix = (link.updated_at or "unknown").replace("-", "")
     identifier = _build_asset_identifier(link.url)
@@ -116,6 +134,8 @@ def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLRe
 
 
 def _classify_link_kind(label: str) -> str:
+    """Classify a DPC link label into official, provisional, or other."""
+
     if "正式版" in label:
         return "official"
     if "暫定版" in label:
@@ -124,11 +144,15 @@ def _classify_link_kind(label: str) -> str:
 
 
 def _read_bytes(url_reader: URLReader, url: str) -> bytes:
+    """Read all bytes from a URL reader response."""
+
     with url_reader(url) as response:
         return response.read()
 
 
 def _build_asset_identifier(url: str) -> str:
+    """Build a stable filename identifier from a source URL."""
+
     path = Path(urlparse(url).path)
     if path.stem:
         return path.stem

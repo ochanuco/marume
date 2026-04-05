@@ -10,6 +10,8 @@ from marume_data.sqlite_builder import create_snapshot_database, load_snapshot_j
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for SQLite snapshot generation."""
+
     parser = argparse.ArgumentParser(description="Build a SQLite snapshot from normalized JSON.")
     parser.add_argument("--input", type=Path, required=True, help="Normalized snapshot JSON path.")
     parser.add_argument("--output", type=Path, required=True, help="SQLite output path.")
@@ -17,6 +19,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Build a SQLite file from a normalized snapshot JSON input."""
+
     args = parse_args()
     try:
         snapshot = load_snapshot_json(args.input)

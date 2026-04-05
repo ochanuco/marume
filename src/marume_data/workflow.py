@@ -12,6 +12,8 @@ from marume_data.transform import parse_mhlw_dpc_page, write_snapshot_from_sourc
 
 @dataclass(slots=True)
 class WorkflowPaths:
+    """Filesystem locations used by the Python data workflow."""
+
     raw_dir: Path
     rules_csv: Path
     snapshot_json: Path
@@ -20,12 +22,16 @@ class WorkflowPaths:
 
 @dataclass(slots=True)
 class WorkflowConfig:
+    """Configuration required to run the Python data workflow."""
+
     source_url: str
     fiscal_year: int
     paths: WorkflowPaths
 
 
 def load_workflow_config(path: Path) -> WorkflowConfig:
+    """Load a workflow JSON file into a typed configuration object."""
+
     raw = json.loads(path.read_text(encoding="utf-8"))
     paths = raw["paths"]
     return WorkflowConfig(
@@ -41,6 +47,8 @@ def load_workflow_config(path: Path) -> WorkflowConfig:
 
 
 def run_workflow(config: WorkflowConfig, url_reader: URLReader) -> dict[str, str]:
+    """Run fetch, scaffold, transform, and SQLite build in order."""
+
     manifest = fetch_mhlw_dpc_assets(
         output_dir=config.paths.raw_dir,
         page_url=config.source_url,
@@ -81,6 +89,8 @@ def run_workflow(config: WorkflowConfig, url_reader: URLReader) -> dict[str, str
 
 
 def _rules_csv_has_data(path: Path) -> bool:
+    """Return whether a rules CSV contains at least one data row."""
+
     if not path.exists():
         return False
     lines = path.read_text(encoding="utf-8").splitlines()

@@ -72,6 +72,8 @@ SCHEMA_STATEMENTS = (
 
 
 def create_snapshot_database(output_path: Path, snapshot: Snapshot) -> None:
+    """Create or replace a SQLite snapshot database from a normalized snapshot."""
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(output_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -87,6 +89,8 @@ def create_snapshot_database(output_path: Path, snapshot: Snapshot) -> None:
 
 
 def load_snapshot_json(path: Path) -> Snapshot:
+    """Load normalized snapshot JSON into typed dataclasses."""
+
     raw = json.loads(path.read_text(encoding="utf-8"))
     rule_set_raw = raw["rule_set"]
     rules: list[Rule] = []
@@ -134,6 +138,8 @@ def load_snapshot_json(path: Path) -> Snapshot:
 
 
 def _replace_rule_set(connection: sqlite3.Connection, rule_set: RuleSet) -> None:
+    """Replace the stored rule set header and clear dependent tables."""
+
     connection.execute("DELETE FROM rule_conditions")
     connection.execute("DELETE FROM rules")
     connection.execute("DELETE FROM rule_sets")
@@ -156,6 +162,8 @@ def _replace_rule_set(connection: sqlite3.Connection, rule_set: RuleSet) -> None
 
 
 def _replace_rules(connection: sqlite3.Connection, rule_set: RuleSet) -> None:
+    """Replace all rules and rule conditions for a rule set."""
+
     for rule in rule_set.rules:
         connection.execute(
             """
@@ -185,6 +193,8 @@ def _replace_rules(connection: sqlite3.Connection, rule_set: RuleSet) -> None:
 
 
 def _replace_icd_master(connection: sqlite3.Connection, rows: list[ICDMasterRow]) -> None:
+    """Replace the ICD master rows in the SQLite snapshot."""
+
     connection.execute("DELETE FROM icd_master")
     connection.executemany(
         """
@@ -206,6 +216,8 @@ def _replace_icd_master(connection: sqlite3.Connection, rows: list[ICDMasterRow]
 
 
 def _replace_procedure_master(connection: sqlite3.Connection, rows: list[ProcedureMasterRow]) -> None:
+    """Replace the procedure master rows in the SQLite snapshot."""
+
     connection.execute("DELETE FROM procedure_master")
     connection.executemany(
         """
@@ -217,6 +229,8 @@ def _replace_procedure_master(connection: sqlite3.Connection, rows: list[Procedu
 
 
 def _replace_metadata(connection: sqlite3.Connection, metadata: dict[str, str]) -> None:
+    """Replace free-form metadata rows in the SQLite snapshot."""
+
     connection.execute("DELETE FROM metadata")
     connection.executemany(
         "INSERT INTO metadata (key, value) VALUES (?, ?)",
@@ -225,6 +239,8 @@ def _replace_metadata(connection: sqlite3.Connection, metadata: dict[str, str]) 
 
 
 def _normalize_json_value(value: object) -> str | None:
+    """Normalize JSON-like values to the stored string representation."""
+
     if value is None:
         return None
     if isinstance(value, str):

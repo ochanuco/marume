@@ -19,6 +19,8 @@ RULES_CSV_HEADERS = (
 
 
 def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path) -> Path:
+    """Create a CSV scaffold from the official PDF referenced by a manifest."""
+
     pdf_path = resolve_latest_pdf_path(manifest_path, kind="official")
     if pdf_path is None:
         raise FileNotFoundError("official DPC PDF was not found in manifest")
@@ -26,6 +28,8 @@ def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path)
 
 
 def scaffold_rules_csv_from_pdf(pdf_path: Path, output_csv_path: Path) -> Path:
+    """Create a header-only CSV scaffold for manual rule extraction work."""
+
     if not pdf_path.exists():
         raise FileNotFoundError(pdf_path)
 

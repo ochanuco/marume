@@ -7,6 +7,8 @@ from marume_data.fetch import load_manifest, resolve_page_path, resolve_rules_cs
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for snapshot JSON generation."""
+
     parser = argparse.ArgumentParser(description="Transform fetched MHLW assets into a snapshot JSON.")
     parser.add_argument("--input", type=Path, default=None, help="Fetched HTML source file path.")
     parser.add_argument(
@@ -32,6 +34,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Transform fetched MHLW assets into one normalized snapshot JSON file."""
+
     args = parse_args()
     from marume_data.transform import parse_mhlw_dpc_page, write_snapshot_from_sources
 
@@ -55,6 +59,8 @@ def main() -> int:
 
 
 def _resolve_input_path(input_path: Path | None, manifest_path: Path | None) -> Path:
+    """Resolve the HTML input path from explicit input or manifest."""
+
     if input_path is not None:
         if not input_path.exists():
             raise FileNotFoundError(input_path)
@@ -68,6 +74,8 @@ def _resolve_input_path(input_path: Path | None, manifest_path: Path | None) -> 
 
 
 def _resolve_rules_csv(manifest_path: Path | None) -> Path | None:
+    """Resolve an optional rules CSV path from the manifest."""
+
     if manifest_path is None:
         return None
     resolved = resolve_rules_csv_path(manifest_path)
@@ -77,6 +85,8 @@ def _resolve_rules_csv(manifest_path: Path | None) -> Path | None:
 
 
 def _resolve_source_url(source_url: str | None, manifest_path: Path | None) -> str:
+    """Resolve the source URL from an explicit flag or a manifest."""
+
     if source_url:
         return source_url
     if manifest_path is not None:

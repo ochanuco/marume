@@ -11,6 +11,8 @@ from urllib.parse import urljoin
 
 @dataclass(slots=True)
 class DPCSourceLink:
+    """One DPC source link parsed from the MHLW page."""
+
     label: str
     url: str
     updated_at: str | None = None
@@ -18,12 +20,16 @@ class DPCSourceLink:
 
 @dataclass(slots=True)
 class DPCPageMetadata:
+    """Parsed metadata extracted from the MHLW DPC landing page."""
+
     title: str | None
     dpc_links: list[DPCSourceLink]
 
 
 @dataclass(slots=True)
 class DPCFlatRuleRow:
+    """One flattened rule row read from an intermediate CSV."""
+
     rule_id: str
     priority: int
     dpc_code: str
@@ -34,6 +40,8 @@ class DPCFlatRuleRow:
 
 
 class _MHLWPageParser(HTMLParser):
+    """Minimal HTML parser for title text and anchor extraction."""
+
     def __init__(self, base_url: str) -> None:
         super().__init__()
         self.base_url = base_url
@@ -74,6 +82,8 @@ def write_snapshot_from_mhlw_html(
     fiscal_year: int,
     source_url: str,
 ) -> None:
+    """Build a metadata-only snapshot JSON directly from fetched HTML."""
+
     html = input_path.read_text(encoding="utf-8")
     metadata = parse_mhlw_dpc_page(html=html, base_url=source_url)
     payload = build_snapshot_payload(
@@ -92,6 +102,8 @@ def write_snapshot_from_sources(
     page_metadata: DPCPageMetadata,
     rules_csv_path: Path | None = None,
 ) -> None:
+    """Build a snapshot JSON from parsed page metadata and optional rules CSV."""
+
     rules = parse_dpc_rules_csv(rules_csv_path) if rules_csv_path else []
     payload = build_snapshot_payload(
         fiscal_year=fiscal_year,
@@ -109,6 +121,8 @@ def build_snapshot_payload(
     page_metadata: DPCPageMetadata,
     flat_rules: list[DPCFlatRuleRow] | None = None,
 ) -> dict[str, object]:
+    """Build the normalized snapshot payload written to JSON."""
+
     latest_link = _select_preferred_link(page_metadata.dpc_links)
     rules = [_build_rule_payload(row) for row in flat_rules or []]
     return {
@@ -139,6 +153,8 @@ def build_snapshot_payload(
 
 
 def parse_mhlw_dpc_page(html: str, base_url: str) -> DPCPageMetadata:
+    """Parse DPC links and page title from the MHLW landing page HTML."""
+
     parser = _MHLWPageParser(base_url=base_url)
     parser.feed(html)
 
@@ -162,6 +178,8 @@ def parse_mhlw_dpc_page(html: str, base_url: str) -> DPCPageMetadata:
 
 
 def parse_dpc_rules_csv(path: Path) -> list[DPCFlatRuleRow]:
+    """Parse a flattened rules CSV into typed rows with validation."""
+
     with path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         fieldnames = reader.fieldnames or []
@@ -199,6 +217,8 @@ def parse_dpc_rules_csv(path: Path) -> list[DPCFlatRuleRow]:
 
 
 def write_placeholder_snapshot(output_path: Path, fiscal_year: int, source_url: str) -> None:
+    """Write a placeholder snapshot used before real rule extraction exists."""
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "rule_set": {
@@ -221,12 +241,16 @@ def write_placeholder_snapshot(output_path: Path, fiscal_year: int, source_url: 
 
 
 def _derive_rule_version(fiscal_year: int, latest_link: DPCSourceLink | None) -> str:
+    """Derive a rule version from fiscal year and preferred source update date."""
+
     if latest_link and latest_link.updated_at:
         return f"{fiscal_year}.{latest_link.updated_at.replace('-', '')}"
     return f"{fiscal_year}.0.0-poc"
 
 
 def _select_preferred_link(links: list[DPCSourceLink]) -> DPCSourceLink | None:
+    """Prefer an official link, otherwise fall back to the newest parsed link."""
+
     if not links:
         return None
 
@@ -237,6 +261,8 @@ def _select_preferred_link(links: list[DPCSourceLink]) -> DPCSourceLink | None:
 
 
 def _extract_updated_at(text: str) -> str | None:
+    """Extract an ISO date from a Japanese update label."""
+
     match = re.search(r"令和(?P<era_year>\d+)年(?P<month>\d+)月(?P<day>\d+)日更新", text)
     if not match:
         return None
@@ -247,10 +273,14 @@ def _extract_updated_at(text: str) -> str | None:
 
 
 def _normalize_space(text: str) -> str:
+    """Collapse full-width and repeated whitespace into single ASCII spaces."""
+
     return " ".join(text.replace("\u3000", " ").split())
 
 
 def _build_rule_payload(row: DPCFlatRuleRow) -> dict[str, object]:
+    """Convert one flat CSV row into the nested snapshot rule shape."""
+
     conditions: list[dict[str, object]] = []
     if row.main_diagnosis:
         conditions.append(

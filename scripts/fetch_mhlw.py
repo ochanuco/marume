@@ -10,6 +10,8 @@ from marume_data.http import url_reader_with_timeout
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for fetching MHLW source assets."""
+
     parser = argparse.ArgumentParser(description="Fetch MHLW source pages for marume data prep.")
     parser.add_argument("--url", required=True, help="Source page URL to fetch.")
     parser.add_argument(
@@ -22,6 +24,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Run the fetch CLI and print written asset paths."""
+
     args = parse_args()
     try:
         manifest = fetch_mhlw_dpc_assets(

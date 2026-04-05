@@ -10,12 +10,16 @@ from marume_data.workflow import load_workflow_config, run_workflow
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for the workflow runner."""
+
     parser = argparse.ArgumentParser(description="Run the marume Python data workflow from a JSON config.")
     parser.add_argument("--workflow", type=Path, required=True, help="Workflow JSON path.")
     return parser.parse_args()
 
 
 def main() -> int:
+    """Run the configured workflow and print the result JSON."""
+
     args = parse_args()
     try:
         config = load_workflow_config(args.workflow)
