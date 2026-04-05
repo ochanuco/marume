@@ -100,7 +100,7 @@ def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
     return None
 
 
-def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path | None:
+def resolve_latest_asset_path(manifest_path: Path, kind: str = "official") -> Path | None:
     """Resolve the newest DPC source asset path of a given kind from a manifest."""
 
     manifest = load_manifest(manifest_path)

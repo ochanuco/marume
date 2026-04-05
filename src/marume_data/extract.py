@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-from marume_data.fetch import resolve_latest_pdf_path
+from marume_data.fetch import resolve_latest_asset_path
 
 
 RULES_CSV_HEADERS = (
@@ -22,36 +23,47 @@ RULES_CSV_HEADERS = (
 
 
 def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path) -> Path:
-    """Extract rules CSV rows from the official DPC source asset referenced by a manifest."""
+    """Extract rules CSV rows from the official DPC workbook referenced by a manifest."""
 
-    source_path = resolve_latest_pdf_path(manifest_path, kind="official")
+    source_path = resolve_latest_asset_path(manifest_path, kind="official")
     if source_path is None:
-        raise FileNotFoundError("official DPC source asset was not found in manifest")
-    return scaffold_rules_csv_from_pdf(pdf_path=source_path, output_csv_path=output_csv_path)
+        raise FileNotFoundError("official DPC workbook was not found in manifest")
+    if source_path.suffix.lower() not in {".xlsx", ".xlsm"}:
+        raise ValueError(f"official DPC workbook is required, but got: {source_path.name}")
+    return scaffold_rules_csv_from_workbook(workbook_path=source_path, output_csv_path=output_csv_path)
 
 
-def scaffold_rules_csv_from_pdf(pdf_path: Path, output_csv_path: Path) -> Path:
+def scaffold_rules_csv_from_workbook(workbook_path: Path, output_csv_path: Path) -> Path:
     """Extract flattened rule rows from an official DPC workbook."""
 
-    if not pdf_path.exists():
-        raise FileNotFoundError(pdf_path)
+    if not workbook_path.exists():
+        raise FileNotFoundError(workbook_path)
 
-    rows = _extract_flat_rule_rows(pdf_path)
+    rows = _extract_flat_rule_rows(workbook_path)
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_csv_path.open("w", encoding="utf-8", newline="") as handle:
+    tmp_output_csv_path = output_csv_path.with_name(f".{output_csv_path.name}.tmp")
+    with tmp_output_csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(RULES_CSV_HEADERS)
         writer.writerows(rows)
+        handle.flush()
+        os.fsync(handle.fileno())
+    tmp_output_csv_path.replace(output_csv_path)
 
     metadata_path = output_csv_path.with_suffix(".source.json")
     metadata = {
-        "source_pdf": str(pdf_path),
+        "source_workbook": str(workbook_path),
         "output_csv": str(output_csv_path),
         "status": "extracted",
         "row_count": len(rows),
         "note": "Rows were extracted from the official DPC workbook. Procedure mapping is still simplified.",
     }
-    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_metadata_path = metadata_path.with_name(f".{metadata_path.name}.tmp")
+    with tmp_metadata_path.open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    tmp_metadata_path.replace(metadata_path)
     return output_csv_path
 
 
