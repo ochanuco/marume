@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import urllib.error
 from pathlib import Path
 
 from marume_data.fetch import fetch_mhlw_dpc_assets
@@ -28,6 +29,15 @@ def main() -> int:
             page_url=args.url,
             url_reader=url_reader_with_timeout,
         )
+    except urllib.error.HTTPError as exc:
+        print(f"厚労省データの取得で HTTP エラーが発生しました: {args.url}: {exc}", file=sys.stderr)
+        return 1
+    except urllib.error.URLError as exc:
+        print(f"厚労省データの取得でネットワークエラーが発生しました: {args.url}: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"厚労省データの保存に失敗しました: {args.output_dir}: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"厚労省データの取得に失敗しました: {args.url}: {exc}", file=sys.stderr)
         return 1

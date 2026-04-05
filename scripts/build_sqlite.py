@@ -27,6 +27,9 @@ def main() -> int:
     except json.JSONDecodeError as exc:
         print(f"入力JSONの読み込みに失敗しました: {args.input}: {exc}", file=sys.stderr)
         return 1
+    except KeyError as exc:
+        print(f"入力JSONに必須キーがありません: {args.input}: {exc}", file=sys.stderr)
+        return 1
     except sqlite3.Error as exc:
         print(f"SQLite 生成に失敗しました: {args.output}: {exc}", file=sys.stderr)
         return 1
