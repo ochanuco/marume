@@ -425,6 +425,9 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) 
 	return file, file.Close, nil
 }
 
+// resolveRulesPath keeps default rule loading backward compatible:
+// explicit --rules wins; otherwise prefer the default SQLite path, then the legacy JSON path.
+// flagWasProvided is used so an explicit --rules rules/rules-2026.sqlite keeps the original path.
 func resolveRulesPath(flags *flag.FlagSet, requestedPath string) string {
 	if requestedPath != defaultRulePath || flagWasProvided(flags, "rules") {
 		return requestedPath
