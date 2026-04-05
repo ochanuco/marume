@@ -5,8 +5,12 @@ import json
 import os
 from io import BytesIO
 from pathlib import Path
+from typing import Sequence
 
 from openpyxl import load_workbook
+from openpyxl.workbook.workbook import Workbook
+from openpyxl.worksheet._read_only import ReadOnlyWorksheet
+from openpyxl.worksheet.worksheet import Worksheet
 
 from marume_data.fetch import resolve_latest_asset_path
 
@@ -20,6 +24,14 @@ RULES_CSV_HEADERS = (
     "main_diagnosis",
     "procedures",
 )
+
+ICD_SHEET_NAME = "４）ＩＣＤ"
+POINT_TABLE_SHEET_NAME = "11）診断群分類点数表"
+POINT_TABLE_DPC_CODE_INDEX = 2
+POINT_TABLE_LABEL_INDEX = 3
+ICD_TABLE_MDC_CODE_INDEX = 0
+ICD_TABLE_CLASSIFICATION_CODE_INDEX = 1
+ICD_TABLE_CODE_INDEX = 3
 
 
 def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path) -> Path:
@@ -72,15 +84,29 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
 
     workbook = load_workbook(BytesIO(source_path.read_bytes()), read_only=True, data_only=True)
     try:
-        icd_by_classification = _load_first_icd_by_classification(workbook["４）ＩＣＤ"])
-        score_sheet = workbook["11）診断群分類点数表"]
+        icd_by_classification = _load_first_icd_by_classification(_require_sheet(workbook, ICD_SHEET_NAME))
+        score_sheet = _require_sheet(workbook, POINT_TABLE_SHEET_NAME)
         rows: list[tuple[str, int, str, str, str, str, str]] = []
         priority = 10
         for row_index, row in enumerate(score_sheet.iter_rows(min_row=5, values_only=True), start=1):
-            dpc_code = _normalize_cell(row[2])
+            dpc_code = _normalize_cell(
+                _cell_at(
+                    row,
+                    POINT_TABLE_DPC_CODE_INDEX,
+                    sheet_name=POINT_TABLE_SHEET_NAME,
+                    row_index=row_index,
+                )
+            )
             if not dpc_code:
                 continue
-            label = _normalize_cell(row[3]) or dpc_code
+            label = _normalize_cell(
+                _cell_at(
+                    row,
+                    POINT_TABLE_LABEL_INDEX,
+                    sheet_name=POINT_TABLE_SHEET_NAME,
+                    row_index=row_index,
+                )
+            ) or dpc_code
             mdc_code = dpc_code[:2]
             classification_code = dpc_code[2:6]
             main_diagnosis = icd_by_classification.get((mdc_code, classification_code), "")
@@ -101,18 +127,47 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
         workbook.close()
 
 
-def _load_first_icd_by_classification(sheet: object) -> dict[tuple[str, str], str]:
+def _load_first_icd_by_classification(sheet: Worksheet | ReadOnlyWorksheet) -> dict[tuple[str, str], str]:
     """Load the first ICD code for each classification from the ICD sheet."""
 
     mapping: dict[tuple[str, str], str] = {}
-    for row in sheet.iter_rows(min_row=3, values_only=True):
-        mdc_code = _normalize_cell(row[0])
-        classification_code = _normalize_cell(row[1])
-        icd_code = _normalize_cell(row[3])
+    for row_index, row in enumerate(sheet.iter_rows(min_row=3, values_only=True), start=1):
+        mdc_code = _normalize_cell(
+            _cell_at(row, ICD_TABLE_MDC_CODE_INDEX, sheet_name=ICD_SHEET_NAME, row_index=row_index)
+        )
+        classification_code = _normalize_cell(
+            _cell_at(
+                row,
+                ICD_TABLE_CLASSIFICATION_CODE_INDEX,
+                sheet_name=ICD_SHEET_NAME,
+                row_index=row_index,
+            )
+        )
+        icd_code = _normalize_cell(
+            _cell_at(row, ICD_TABLE_CODE_INDEX, sheet_name=ICD_SHEET_NAME, row_index=row_index)
+        )
         if not mdc_code or not classification_code or not icd_code:
             continue
         mapping.setdefault((mdc_code, classification_code), icd_code)
     return mapping
+
+
+def _require_sheet(workbook: Workbook, sheet_name: str) -> Worksheet | ReadOnlyWorksheet:
+    """Return a worksheet by name or raise a clear error."""
+
+    if sheet_name not in workbook.sheetnames:
+        raise ValueError(f"required sheet was not found in workbook: {sheet_name}")
+    return workbook[sheet_name]
+
+
+def _cell_at(row: Sequence[object], index: int, *, sheet_name: str, row_index: int) -> object:
+    """Return one cell value or raise a clear error for malformed workbook rows."""
+
+    if len(row) <= index:
+        raise ValueError(
+            f"malformed row in sheet {sheet_name}: row {row_index} does not have column index {index}"
+        )
+    return row[index]
 
 
 def _normalize_cell(value: object) -> str:

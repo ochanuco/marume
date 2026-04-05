@@ -32,7 +32,7 @@ def main() -> int:
 
 
 def _run(args: argparse.Namespace) -> Path:
-    """Dispatch extraction from either a manifest or an explicit PDF path."""
+    """Dispatch extraction from either a manifest or an explicit workbook path."""
 
     if args.manifest is not None:
         return scaffold_rules_csv_from_manifest(args.manifest, args.output)
