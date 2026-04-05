@@ -25,6 +25,34 @@ mise install
 go build ./cmd/marume
 ```
 
+Python でデータ収集・整形を進める場合は、以下を使います。
+
+```bash
+uv venv --python 3.13
+uv sync
+```
+
+workflow JSON を使う場合は、`workflows/dpc_2026_mhlw.json` を起点にします。
+
+```bash
+uv run python scripts/run_workflow.py --workflow workflows/dpc_2026_mhlw.json
+```
+
+初回実行では `dpc_rules.csv` の雛形を作って停止します。
+抽出済みの `dpc_rules.csv` を配置したあと、同じ workflow を再実行すると snapshot JSON と SQLite まで進みます。
+
+最小の Python データパイプラインは以下の 4 段階です。
+
+```bash
+uv run python scripts/fetch_mhlw.py --url https://www.mhlw.go.jp/stf/newpage_67729.html --output-dir .local/raw/mhlw
+uv run python scripts/extract_dpc_pdf.py --manifest .local/raw/mhlw/manifest.json --output .local/raw/mhlw/dpc_rules.csv
+uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --fiscal-year 2026 --output .local/intermediate/dpc-2026.json
+uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
+```
+
+`transform_dpc.py` は `--fiscal-year` を必須にしています。
+`--source-url` は未指定時、`--manifest` に含まれる `page_url` を使います。
+
 ## 使い方
 
 ```bash
@@ -67,7 +95,7 @@ go build ./cmd/marume
 ```json
 {"line_no":1,"case_id":"123","status":"ok","result":{"case_id":"123","dpc_code":"040080xx99x0xx","version":"2026.0.0-poc","matched_rule_id":"R-2026-00010","reasons":[{"code":"MAIN_DIAGNOSIS_MATCH","message":"主傷病名が I219 に一致しました","message_en":"main diagnosis matched I219"},{"code":"PROCEDURE_MATCH","message":"手術・処置コードに K549 が含まれています","message_en":"procedures contains K549"}]}}
 {"line_no":2,"case_id":"999","status":"error","error":{"code":"NO_CLASSIFICATION","message":"症例 999 に一致する分類が見つかりません","message_en":"no classification matched for case 999"}}
-{"line_no":3,"status":"error","error":{"code":"INVALID_JSON","message":"3 行目のJSONが不正です: <decoder error>","message_en":"invalid JSON at line 3: <decoder error>"}}
+{"line_no":3,"status":"error","error":{"code":"INVALID_JSON","message":"3 行目の JSON が不正です: <decoder error>","message_en":"invalid JSON at line 3: <decoder error>"}}
 ```
 
 ## 現在の構造
@@ -84,3 +112,7 @@ go build ./cmd/marume
 2. `validate` を JSON Schema か独自ルールで強化
 3. Dataform / BigQuery 由来のスナップショット生成に接続する
 4. Cobra ベースのコマンド体系に移行
+
+## SQLite 化メモ
+
+- 基礎データの収集元と最小スキーマ案は `docs/sqlite-data-sourcing.md` を参照
