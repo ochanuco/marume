@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from marume_data.fetch import fetch_mhlw_dpc_assets
@@ -21,11 +22,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    manifest = fetch_mhlw_dpc_assets(
-        output_dir=args.output_dir,
-        page_url=args.url,
-        url_reader=url_reader_with_timeout,
-    )
+    try:
+        manifest = fetch_mhlw_dpc_assets(
+            output_dir=args.output_dir,
+            page_url=args.url,
+            url_reader=url_reader_with_timeout,
+        )
+    except Exception as exc:
+        print(f"厚労省データの取得に失敗しました: {args.url}: {exc}", file=sys.stderr)
+        return 1
     print(args.output_dir / manifest["page_path"])
     for asset in manifest["assets"]:
         print(args.output_dir / asset["path"])
