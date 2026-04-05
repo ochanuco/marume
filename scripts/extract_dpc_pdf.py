@@ -27,6 +27,9 @@ def main() -> int:
     except FileNotFoundError as exc:
         print(f"入力ファイルが見つかりません: {exc}", file=sys.stderr)
         return 1
+    except ValueError as exc:
+        print(f"入力が不正です: {exc}", file=sys.stderr)
+        return 1
     print(output_path)
     return 0
 

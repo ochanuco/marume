@@ -3,11 +3,12 @@ from __future__ import annotations
 import csv
 import json
 import os
-from io import BytesIO
 from pathlib import Path
 from typing import Sequence
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet._read_only import ReadOnlyWorksheet
 from openpyxl.worksheet.worksheet import Worksheet
@@ -32,6 +33,7 @@ POINT_TABLE_LABEL_INDEX = 3
 ICD_TABLE_MDC_CODE_INDEX = 0
 ICD_TABLE_CLASSIFICATION_CODE_INDEX = 1
 ICD_TABLE_CODE_INDEX = 3
+WORKBOOK_SUFFIXES = {".xlsx", ".xlsm"}
 
 
 def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path) -> Path:
@@ -40,7 +42,7 @@ def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path)
     source_path = resolve_latest_asset_path(manifest_path, kind="official")
     if source_path is None:
         raise FileNotFoundError("official DPC workbook was not found in manifest")
-    if source_path.suffix.lower() not in {".xlsx", ".xlsm"}:
+    if source_path.suffix.lower() not in WORKBOOK_SUFFIXES:
         raise ValueError(f"official DPC workbook is required, but got: {source_path.name}")
     return scaffold_rules_csv_from_workbook(workbook_path=source_path, output_csv_path=output_csv_path)
 
@@ -50,8 +52,13 @@ def scaffold_rules_csv_from_workbook(workbook_path: Path, output_csv_path: Path)
 
     if not workbook_path.exists():
         raise FileNotFoundError(workbook_path)
+    if workbook_path.suffix.lower() not in WORKBOOK_SUFFIXES:
+        raise ValueError(f"workbook file must end with .xlsx or .xlsm: {workbook_path.name}")
 
-    rows = _extract_flat_rule_rows(workbook_path)
+    try:
+        rows = _extract_flat_rule_rows(workbook_path)
+    except (InvalidFileException, BadZipFile, OSError) as exc:
+        raise ValueError(f"failed to parse workbook file: {workbook_path.name}") from exc
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_output_csv_path = output_csv_path.with_name(f".{output_csv_path.name}.tmp")
     with tmp_output_csv_path.open("w", encoding="utf-8", newline="") as handle:
@@ -82,19 +89,20 @@ def scaffold_rules_csv_from_workbook(workbook_path: Path, output_csv_path: Path)
 def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str, str, str, str]]:
     """Extract a minimal flattened rule CSV from the official DPC workbook."""
 
-    workbook = load_workbook(BytesIO(source_path.read_bytes()), read_only=True, data_only=True)
+    workbook = load_workbook(source_path, read_only=True, data_only=True)
     try:
         icd_by_classification = _load_first_icd_by_classification(_require_sheet(workbook, ICD_SHEET_NAME))
         score_sheet = _require_sheet(workbook, POINT_TABLE_SHEET_NAME)
         rows: list[tuple[str, int, str, str, str, str, str]] = []
         priority = 10
-        for row_index, row in enumerate(score_sheet.iter_rows(min_row=5, values_only=True), start=1):
+        for row_number, row in enumerate(score_sheet.iter_rows(min_row=5, values_only=True), start=1):
+            sheet_row_index = row_number + 4
             dpc_code = _normalize_cell(
                 _cell_at(
                     row,
                     POINT_TABLE_DPC_CODE_INDEX,
                     sheet_name=POINT_TABLE_SHEET_NAME,
-                    row_index=row_index,
+                    row_index=sheet_row_index,
                 )
             )
             if not dpc_code:
@@ -104,7 +112,7 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
                     row,
                     POINT_TABLE_LABEL_INDEX,
                     sheet_name=POINT_TABLE_SHEET_NAME,
-                    row_index=row_index,
+                    row_index=sheet_row_index,
                 )
             ) or dpc_code
             mdc_code = dpc_code[:2]
@@ -112,7 +120,7 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
             main_diagnosis = icd_by_classification.get((mdc_code, classification_code), "")
             rows.append(
                 (
-                    f"R-{mdc_code}{classification_code}-{row_index:05d}",
+                    f"R-{mdc_code}{classification_code}-{row_number:05d}",
                     priority,
                     dpc_code,
                     mdc_code,
@@ -131,7 +139,7 @@ def _load_first_icd_by_classification(sheet: Worksheet | ReadOnlyWorksheet) -> d
     """Load the first ICD code for each classification from the ICD sheet."""
 
     mapping: dict[tuple[str, str], str] = {}
-    for row_index, row in enumerate(sheet.iter_rows(min_row=3, values_only=True), start=1):
+    for row_index, row in enumerate(sheet.iter_rows(min_row=3, values_only=True), start=3):
         mdc_code = _normalize_cell(
             _cell_at(row, ICD_TABLE_MDC_CODE_INDEX, sheet_name=ICD_SHEET_NAME, row_index=row_index)
         )

@@ -113,8 +113,30 @@ def test_workbookの行が壊れている場合は列不足を明示して失敗
 
     with pytest.raises(
         ValueError,
-        match="malformed row in sheet 11）診断群分類点数表: row 1 does not have column index 3",
+        match="malformed row in sheet 11）診断群分類点数表: row 5 does not have column index 3",
     ):
+        scaffold_rules_csv_from_workbook(
+            workbook_path=workbook_path,
+            output_csv_path=tmp_path / "dpc_rules.csv",
+        )
+
+
+def test_workbookの拡張子が不正な場合は明示エラーにする(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "dpc_official_20260318.pdf"
+    workbook_path.write_bytes(b"%PDF-pretend")
+
+    with pytest.raises(ValueError, match=r"workbook file must end with \.xlsx or \.xlsm"):
+        scaffold_rules_csv_from_workbook(
+            workbook_path=workbook_path,
+            output_csv_path=tmp_path / "dpc_rules.csv",
+        )
+
+
+def test_workbookの中身が壊れている場合は明示エラーにする(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "dpc_official_20260318.xlsx"
+    workbook_path.write_bytes(b"not-a-zip")
+
+    with pytest.raises(ValueError, match=r"failed to parse workbook file: dpc_official_20260318\.xlsx"):
         scaffold_rules_csv_from_workbook(
             workbook_path=workbook_path,
             output_csv_path=tmp_path / "dpc_rules.csv",
