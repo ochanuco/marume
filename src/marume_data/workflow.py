@@ -56,16 +56,16 @@ def run_workflow(config: WorkflowConfig, url_reader: URLReader) -> dict[str, str
     )
     manifest_path = config.paths.raw_dir / "manifest.json"
     if not _rules_csv_has_data(config.paths.rules_csv):
-        if not config.paths.rules_csv.exists():
-            scaffold_rules_csv_from_manifest(
-                manifest_path=manifest_path,
-                output_csv_path=config.paths.rules_csv,
-            )
-        return {
-            "status": "needs_rules_csv",
-            "manifest": str(manifest_path),
-            "rules_csv": str(config.paths.rules_csv),
-        }
+        scaffold_rules_csv_from_manifest(
+            manifest_path=manifest_path,
+            output_csv_path=config.paths.rules_csv,
+        )
+        if not _rules_csv_has_data(config.paths.rules_csv):
+            return {
+                "status": "needs_rules_csv",
+                "manifest": str(manifest_path),
+                "rules_csv": str(config.paths.rules_csv),
+            }
 
     html = (config.paths.raw_dir / str(manifest["page_path"])).read_text(encoding="utf-8")
     metadata = parse_mhlw_dpc_page(html=html, base_url=config.source_url)
