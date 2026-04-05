@@ -61,3 +61,48 @@ def test_manifestからtransformしてsqliteまで作れる(tmp_path) -> None:
     payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
     assert payload["metadata"]["rule_count"] == "2"
     assert sqlite_path.exists()
+
+
+def test_transformはinputとmanifestの同時指定を拒否する(tmp_path) -> None:
+    fixture_dir = Path(__file__).with_name("fixtures")
+    input_path = tmp_path / "mhlw_dpc_page.html"
+    input_path.write_text(
+        (fixture_dir / "mhlw_dpc_page.html").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    manifest = {
+        "page_url": "https://example.com/mhlw_dpc_page.html",
+        "page_path": "mhlw_dpc_page.html",
+        "source_title": "令和８年度診療報酬改定について｜厚生労働省",
+        "assets": [],
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    snapshot_path = tmp_path / "snapshot.json"
+    repo_root = Path(__file__).resolve().parents[1]
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "python",
+            "scripts/transform_dpc.py",
+            "--input",
+            str(input_path),
+            "--manifest",
+            str(manifest_path),
+            "--fiscal-year",
+            "2026",
+            "--source-url",
+            "https://example.com/mhlw_dpc_page.html",
+            "--output",
+            str(snapshot_path),
+        ],
+        check=False,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "--input と --manifest は同時に指定できません" in result.stderr

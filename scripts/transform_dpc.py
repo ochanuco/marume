@@ -77,6 +77,8 @@ def main() -> int:
 def _resolve_input_path(input_path: Path | None, manifest_path: Path | None) -> Path:
     """Resolve the HTML input path from explicit input or manifest."""
 
+    if input_path is not None and manifest_path is not None:
+        raise ValueError("--input と --manifest は同時に指定できません")
     if input_path is not None:
         if not input_path.exists():
             raise FileNotFoundError(input_path)
