@@ -141,3 +141,17 @@ def test_workbookの中身が壊れている場合は明示エラーにする(tm
             workbook_path=workbook_path,
             output_csv_path=tmp_path / "dpc_rules.csv",
         )
+
+
+def test_dpc_codeが先頭6桁で始まらない行はスキップする(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "dpc_official_20260318.xlsx"
+    workbook_path.write_bytes(build_sample_dpc_workbook_bytes(first_point_dpc_code="DPCコード"))
+    output_csv_path = tmp_path / "dpc_rules.csv"
+
+    scaffold_rules_csv_from_workbook(workbook_path=workbook_path, output_csv_path=output_csv_path)
+
+    lines = output_csv_path.read_text(encoding="utf-8").splitlines()
+    assert lines == [
+        ",".join(RULES_CSV_HEADERS),
+        "R-010010-00002,10,010010xx9901xx,01,脳腫瘍,C700,",
+    ]

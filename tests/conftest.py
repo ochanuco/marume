@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TypeAlias
 
 import pytest
 
@@ -22,7 +21,7 @@ class FakeResponse:
         return self._body
 
 
-FakeURLReader: TypeAlias = Callable[[str], FakeResponse]
+type FakeURLReader = Callable[[str], FakeResponse]
 
 
 def build_fake_url_reader(responses: dict[str, bytes]) -> FakeURLReader:

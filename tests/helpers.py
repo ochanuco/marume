@@ -10,6 +10,7 @@ def build_sample_dpc_workbook_bytes(
     include_icd_sheet: bool = True,
     include_point_sheet: bool = True,
     include_point_label_column: bool = True,
+    first_point_dpc_code: str = "010010xx9900xx",
 ) -> bytes:
     """Build a minimal official DPC workbook fixture as xlsx bytes."""
 
@@ -33,7 +34,7 @@ def build_sample_dpc_workbook_bytes(
         if include_point_label_column:
             point_sheet["D3"] = "傷病名ショウビョウメイ"
         point_sheet["B5"] = "1"
-        point_sheet["C5"] = "010010xx9900xx"
+        point_sheet["C5"] = first_point_dpc_code
         if include_point_label_column:
             point_sheet["D5"] = "脳腫瘍"
         point_sheet["B6"] = "2"

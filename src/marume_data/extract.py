@@ -3,15 +3,15 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Sequence
+from typing import Protocol
 from zipfile import BadZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.workbook.workbook import Workbook
-from openpyxl.worksheet._read_only import ReadOnlyWorksheet
-from openpyxl.worksheet.worksheet import Worksheet
 
 from marume_data.fetch import resolve_latest_asset_path
 
@@ -34,6 +34,13 @@ ICD_TABLE_MDC_CODE_INDEX = 0
 ICD_TABLE_CLASSIFICATION_CODE_INDEX = 1
 ICD_TABLE_CODE_INDEX = 3
 WORKBOOK_SUFFIXES = {".xlsx", ".xlsm"}
+DPC_CODE_PATTERN = re.compile(r"^\d{6}")
+
+
+class WorksheetLike(Protocol):
+    """Minimal worksheet protocol used by workbook extraction helpers."""
+
+    def iter_rows(self, *, min_row: int, values_only: bool) -> Iterable[Sequence[object]]: ...
 
 
 def scaffold_rules_csv_from_manifest(manifest_path: Path, output_csv_path: Path) -> Path:
@@ -107,6 +114,9 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
             )
             if not dpc_code:
                 continue
+            dpc_code_parts = _parse_dpc_code(dpc_code)
+            if dpc_code_parts is None:
+                continue
             label = _normalize_cell(
                 _cell_at(
                     row,
@@ -115,8 +125,7 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
                     row_index=sheet_row_index,
                 )
             ) or dpc_code
-            mdc_code = dpc_code[:2]
-            classification_code = dpc_code[2:6]
+            mdc_code, classification_code = dpc_code_parts
             main_diagnosis = icd_by_classification.get((mdc_code, classification_code), "")
             rows.append(
                 (
@@ -135,7 +144,7 @@ def _extract_flat_rule_rows(source_path: Path) -> list[tuple[str, int, str, str,
         workbook.close()
 
 
-def _load_first_icd_by_classification(sheet: Worksheet | ReadOnlyWorksheet) -> dict[tuple[str, str], str]:
+def _load_first_icd_by_classification(sheet: WorksheetLike) -> dict[tuple[str, str], str]:
     """Load the first ICD code for each classification from the ICD sheet."""
 
     mapping: dict[tuple[str, str], str] = {}
@@ -162,7 +171,7 @@ def _load_first_icd_by_classification(sheet: Worksheet | ReadOnlyWorksheet) -> d
     return mapping
 
 
-def _require_sheet(workbook: Workbook, sheet_name: str) -> Worksheet | ReadOnlyWorksheet:
+def _require_sheet(workbook: Workbook, sheet_name: str) -> WorksheetLike:
     """Return a worksheet by name or raise a clear error."""
 
     if sheet_name not in workbook.sheetnames:
@@ -186,3 +195,11 @@ def _normalize_cell(value: object) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _parse_dpc_code(dpc_code: str) -> tuple[str, str] | None:
+    """Return MDC and classification codes when a DPC code starts with six digits."""
+
+    if DPC_CODE_PATTERN.match(dpc_code) is None:
+        return None
+    return dpc_code[:2], dpc_code[2:6]
