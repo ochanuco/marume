@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/ochanuco/marume/internal/domain"
+	"github.com/ochanuco/marume/internal/store"
 	_ "modernc.org/sqlite"
 )
 
@@ -166,44 +167,44 @@ func denormalizeCondition(condition domain.Condition) (string, string, any, any,
 		if len(condition.Values) != 1 {
 			return "", "", nil, nil, nil, fmt.Errorf("%s requires a single value", condition.Type)
 		}
-		return condition.Type, "eq", condition.Values[0], nil, nil, nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
 	case "procedures":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode procedure values: %w", err)
 		}
-		return "procedure", "in", nil, nil, string(valueJSON), nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "diagnoses":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode diagnosis values: %w", err)
 		}
-		return "diagnosis", "in", nil, nil, string(valueJSON), nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "comorbidities":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode comorbidity values: %w", err)
 		}
-		return "comorbidity", "in", nil, nil, string(valueJSON), nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "age":
 		if condition.IntValue == nil {
 			return "", "", nil, nil, nil, fmt.Errorf("age requires int_value")
 		}
-		return "age", condition.Operator, nil, *condition.IntValue, nil, nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
 	default:
 		if len(condition.Values) == 1 {
-			return condition.Type, condition.Operator, condition.Values[0], nil, nil, nil
+			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
 		}
 		if len(condition.Values) > 1 {
 			valueJSON, err := json.Marshal(condition.Values)
 			if err != nil {
 				return "", "", nil, nil, nil, fmt.Errorf("encode fallback values: %w", err)
 			}
-			return condition.Type, condition.Operator, nil, nil, string(valueJSON), nil
+			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 		}
 		if condition.IntValue != nil {
-			return condition.Type, condition.Operator, nil, *condition.IntValue, nil, nil
+			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
 		}
-		return condition.Type, condition.Operator, nil, nil, nil, nil
+		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, nil, nil
 	}
 }

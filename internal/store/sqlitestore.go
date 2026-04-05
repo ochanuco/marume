@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
-	"strings"
 
 	"github.com/ochanuco/marume/internal/domain"
 	_ "modernc.org/sqlite"
@@ -55,17 +55,125 @@ func (s *SQLiteRuleStore) ReadRuleSet(ctx context.Context) (domain.RuleSet, erro
 
 // LoadRuleSet reads a SQLite snapshot and verifies that its fiscal year matches the request.
 func (s *SQLiteRuleStore) LoadRuleSet(ctx context.Context, fiscalYear int) (domain.RuleSet, error) {
-	ruleSet, err := s.ReadRuleSet(ctx)
+	if _, err := os.Stat(s.path); err != nil {
+		return domain.RuleSet{}, fmt.Errorf("read sqlite rule set: %w", err)
+	}
+
+	db, err := sql.Open("sqlite", s.path)
 	if err != nil {
+		return domain.RuleSet{}, fmt.Errorf("open sqlite rule set: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ruleSet, ruleSetID, err := s.readRuleSetMetadataByFiscalYear(ctx, db, fiscalYear)
+	if err == nil {
+		rules, readErr := s.readRules(ctx, db, ruleSetID)
+		if readErr != nil {
+			return domain.RuleSet{}, readErr
+		}
+		ruleSet.Rules = rules
+		return ruleSet, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
 		return domain.RuleSet{}, err
 	}
-	if ruleSet.FiscalYear != fiscalYear {
-		return domain.RuleSet{}, FiscalYearMismatchError{
-			RuleSetFiscalYear: ruleSet.FiscalYear,
-			RequestedYear:     fiscalYear,
+
+	latestRuleSet, _, latestErr := s.readRuleSetMetadata(ctx, db)
+	if latestErr != nil {
+		return domain.RuleSet{}, latestErr
+	}
+	return domain.RuleSet{}, FiscalYearMismatchError{
+		RuleSetFiscalYear: latestRuleSet.FiscalYear,
+		RequestedYear:     fiscalYear,
+	}
+}
+
+func (s *SQLiteRuleStore) readRuleSetMetadataByFiscalYear(ctx context.Context, db *sql.DB, fiscalYear int) (domain.RuleSet, string, error) {
+	const query = `
+SELECT
+	rule_set_id,
+	fiscal_year,
+	rule_version,
+	build_id,
+	built_at
+FROM rule_sets
+WHERE fiscal_year = ?
+ORDER BY rule_set_id DESC
+LIMIT 1
+`
+
+	var (
+		ruleSetID   string
+		ruleVersion string
+		buildID     string
+		builtAt     sql.NullString
+	)
+	if err := db.QueryRowContext(ctx, query, fiscalYear).Scan(&ruleSetID, &fiscalYear, &ruleVersion, &buildID, &builtAt); err != nil {
+		if err == sql.ErrNoRows {
+			return domain.RuleSet{}, "", err
+		}
+		return domain.RuleSet{}, "", fmt.Errorf("read sqlite rule set metadata for fiscal year %d: %w", fiscalYear, err)
+	}
+
+	return domain.RuleSet{
+		FiscalYear:  fiscalYear,
+		RuleVersion: ruleVersion,
+		BuildID:     buildID,
+		BuiltAt:     s.resolveBuiltAt(builtAt),
+	}, ruleSetID, nil
+}
+
+func normalizeSQLiteCondition(
+	conditionType string,
+	operator string,
+	valueText sql.NullString,
+	valueNum sql.NullFloat64,
+	valueJSON sql.NullString,
+) (domain.Condition, error) {
+	normalizedType := normalizeConditionType(conditionType)
+	normalizedOperator := normalizeConditionOperator(operator)
+
+	condition := domain.Condition{
+		Type:     normalizedType,
+		Operator: normalizedOperator,
+	}
+
+	switch normalizedType {
+	case "main_diagnosis", "sex":
+		if !valueText.Valid || valueText.String == "" {
+			return domain.Condition{}, fmt.Errorf("%s requires value_text", normalizedType)
+		}
+		condition.Values = []string{valueText.String}
+	case "diagnoses", "procedures", "comorbidities":
+		values, err := decodeConditionValues(valueText, valueJSON)
+		if err != nil {
+			return domain.Condition{}, err
+		}
+		condition.Values = values
+	case "age":
+		if !valueNum.Valid {
+			return domain.Condition{}, fmt.Errorf("age requires value_num")
+		}
+		value, ok := exactIntFromFloat64(valueNum.Float64)
+		if !ok {
+			return domain.Condition{}, fmt.Errorf("age requires integer value_num")
+		}
+		condition.IntValue = &value
+	default:
+		values, err := decodeConditionValues(valueText, valueJSON)
+		if err != nil {
+			return domain.Condition{}, err
+		}
+		condition.Values = values
+		if valueNum.Valid {
+			if value, ok := exactIntFromFloat64(valueNum.Float64); ok {
+				condition.IntValue = &value
+			}
 		}
 	}
-	return ruleSet, nil
+
+	return condition, nil
 }
 
 func (s *SQLiteRuleStore) readRuleSetMetadata(ctx context.Context, db *sql.DB) (domain.RuleSet, string, error) {
@@ -191,81 +299,6 @@ ORDER BY rc.rule_id, rc.condition_id
 	return conditionsByRuleID, nil
 }
 
-func normalizeSQLiteCondition(
-	conditionType string,
-	operator string,
-	valueText sql.NullString,
-	valueNum sql.NullFloat64,
-	valueJSON sql.NullString,
-) (domain.Condition, error) {
-	normalizedType := normalizeConditionType(conditionType)
-	normalizedOperator := normalizeConditionOperator(operator)
-
-	condition := domain.Condition{
-		Type:     normalizedType,
-		Operator: normalizedOperator,
-	}
-
-	switch normalizedType {
-	case "main_diagnosis", "sex":
-		if !valueText.Valid || valueText.String == "" {
-			return domain.Condition{}, fmt.Errorf("%s requires value_text", normalizedType)
-		}
-		condition.Values = []string{valueText.String}
-	case "diagnoses", "procedures", "comorbidities":
-		values, err := decodeConditionValues(valueText, valueJSON)
-		if err != nil {
-			return domain.Condition{}, err
-		}
-		condition.Values = values
-	case "age":
-		if !valueNum.Valid {
-			return domain.Condition{}, fmt.Errorf("age requires value_num")
-		}
-		value, ok := exactIntFromFloat64(valueNum.Float64)
-		if !ok {
-			return domain.Condition{}, fmt.Errorf("age requires integer value_num")
-		}
-		condition.IntValue = &value
-	default:
-		values, err := decodeConditionValues(valueText, valueJSON)
-		if err != nil {
-			return domain.Condition{}, err
-		}
-		condition.Values = values
-		if valueNum.Valid {
-			if value, ok := exactIntFromFloat64(valueNum.Float64); ok {
-				condition.IntValue = &value
-			}
-		}
-	}
-
-	return condition, nil
-}
-
-func normalizeConditionType(value string) string {
-	switch strings.ToLower(value) {
-	case "procedure":
-		return "procedures"
-	case "diagnosis":
-		return "diagnoses"
-	case "comorbidity":
-		return "comorbidities"
-	default:
-		return strings.ToLower(value)
-	}
-}
-
-func normalizeConditionOperator(value string) string {
-	switch strings.ToLower(value) {
-	case "eq":
-		return "equals"
-	case "in":
-		return "contains_any"
-	default:
-		return strings.ToLower(value)
-	}
-}
 
 func decodeConditionValues(valueText sql.NullString, valueJSON sql.NullString) ([]string, error) {
 	if valueJSON.Valid && valueJSON.String != "" {
