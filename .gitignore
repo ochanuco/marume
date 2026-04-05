@@ -9,6 +9,8 @@ coverage.out
 ## Python
 .venv/
 .python-version
+.pytest_cache/
+.ruff_cache/
 
 ## macOS
 .DS_Store

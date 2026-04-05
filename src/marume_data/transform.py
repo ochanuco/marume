@@ -109,7 +109,7 @@ def build_snapshot_payload(
     page_metadata: DPCPageMetadata,
     flat_rules: list[DPCFlatRuleRow] | None = None,
 ) -> dict[str, object]:
-    latest_link = page_metadata.dpc_links[0] if page_metadata.dpc_links else None
+    latest_link = _select_preferred_link(page_metadata.dpc_links)
     rules = [_build_rule_payload(row) for row in flat_rules or []]
     return {
         "rule_set": {
@@ -211,6 +211,16 @@ def _derive_rule_version(fiscal_year: int, latest_link: DPCSourceLink | None) ->
     if latest_link and latest_link.updated_at:
         return f"{fiscal_year}.{latest_link.updated_at.replace('-', '')}"
     return f"{fiscal_year}.0.0-poc"
+
+
+def _select_preferred_link(links: list[DPCSourceLink]) -> DPCSourceLink | None:
+    if not links:
+        return None
+
+    official_links = [link for link in links if "正式版" in link.label]
+    if official_links:
+        return official_links[0]
+    return links[0]
 
 
 def _extract_updated_at(text: str) -> str | None:

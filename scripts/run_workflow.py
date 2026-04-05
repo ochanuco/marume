@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import urllib.request
 from pathlib import Path
 
+from marume_data.http import url_reader_with_timeout
 from marume_data.workflow import load_workflow_config, run_workflow
 
 
@@ -18,7 +18,7 @@ def main() -> int:
     args = parse_args()
     try:
         config = load_workflow_config(args.workflow)
-        result = run_workflow(config, url_reader=_url_reader_with_timeout)  # noqa: S310
+        result = run_workflow(config, url_reader=url_reader_with_timeout)
     except FileNotFoundError as exc:
         print(f"workflow 実行に必要なファイルが見つかりません: {exc}")
         return 1
@@ -30,11 +30,5 @@ def main() -> int:
         return 1
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
-
-
-def _url_reader_with_timeout(url: str):
-    return urllib.request.urlopen(url, timeout=10)  # noqa: S310
-
-
 if __name__ == "__main__":
     raise SystemExit(main())

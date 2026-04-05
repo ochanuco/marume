@@ -4,12 +4,19 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlparse
 
 from marume_data.transform import DPCSourceLink, parse_mhlw_dpc_page
 
 
+class URLReaderResponse(Protocol):
+    def __enter__(self) -> URLReaderResponse: ...
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> bool | None: ...
+    def read(self) -> bytes: ...
+
+
 class URLReader(Protocol):
-    def __call__(self, url: str): ...
+    def __call__(self, url: str) -> URLReaderResponse: ...
 
 
 @dataclass(slots=True)
@@ -95,7 +102,8 @@ def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path
 def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
     kind = _classify_link_kind(link.label)
     updated_suffix = (link.updated_at or "unknown").replace("-", "")
-    filename = f"dpc_{kind}_{updated_suffix}.pdf"
+    identifier = _build_asset_identifier(link.url)
+    filename = f"dpc_{kind}_{updated_suffix}_{identifier}.pdf"
     file_path = output_dir / filename
     file_path.write_bytes(_read_bytes(url_reader, link.url))
     return DownloadedAsset(
@@ -118,3 +126,10 @@ def _classify_link_kind(label: str) -> str:
 def _read_bytes(url_reader: URLReader, url: str) -> bytes:
     with url_reader(url) as response:
         return response.read()
+
+
+def _build_asset_identifier(url: str) -> str:
+    path = Path(urlparse(url).path)
+    if path.stem:
+        return path.stem
+    return "asset"

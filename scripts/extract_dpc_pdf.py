@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from marume_data.extract import scaffold_rules_csv_from_manifest, scaffold_rules_csv_from_pdf
@@ -17,7 +18,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    output_path = _run(args)
+    try:
+        output_path = _run(args)
+    except FileNotFoundError as exc:
+        print(f"入力ファイルが見つかりません: {exc}", file=sys.stderr)
+        return 1
     print(output_path)
     return 0
 

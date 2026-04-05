@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 
 from marume_data.sqlite_builder import create_snapshot_database, load_snapshot_json
@@ -24,6 +25,9 @@ def main() -> int:
         return 1
     except json.JSONDecodeError as exc:
         print(f"入力JSONの読み込みに失敗しました: {args.input}: {exc}")
+        return 1
+    except sqlite3.Error as exc:
+        print(f"SQLite 生成に失敗しました: {args.output}: {exc}")
         return 1
     except Exception as exc:
         print(f"SQLite 生成に失敗しました: {args.output}: {exc}")

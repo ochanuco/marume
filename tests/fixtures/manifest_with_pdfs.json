@@ -7,14 +7,14 @@
       "kind": "official",
       "label": "診断群分類（DPC）電子点数表（正式版）（令和8年3月18日更新）",
       "source_url": "https://www.mhlw.go.jp/content/12404000/001234568.pdf",
-      "path": "dpc_official_20260318.pdf",
+      "path": "dpc_official_20260318_001234568.pdf",
       "updated_at": "2026-03-18"
     },
     {
       "kind": "provisional",
       "label": "診断群分類（DPC）電子点数表（暫定版）（令和8年3月5日更新）",
       "source_url": "https://www.mhlw.go.jp/content/12404000/001234567.pdf",
-      "path": "dpc_provisional_20260305.pdf",
+      "path": "dpc_provisional_20260305_001234567.pdf",
       "updated_at": "2026-03-05"
     }
   ]

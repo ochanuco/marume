@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from marume_data.workflow import load_workflow_config, run_workflow
 
 
-def test_workflow_JSON初回実行ではCSV雛形を作って止まる(tmp_path: Path) -> None:
+def test_workflow_JSON初回実行ではCSV雛形を作って止まる(
+    tmp_path: Path,
+    fake_url_reader_factory: Callable[[dict[str, bytes]], Callable[[str], object]],
+) -> None:
     fixture_dir = Path(__file__).with_name("fixtures")
     workflow_path = tmp_path / "workflow.json"
     workflow_path.write_text(
@@ -34,7 +38,7 @@ def test_workflow_JSON初回実行ではCSV雛形を作って止まる(tmp_path:
     }
     config = load_workflow_config(workflow_path)
 
-    result = run_workflow(config, url_reader=_fake_url_reader(responses))
+    result = run_workflow(config, url_reader=fake_url_reader_factory(responses))
 
     assert result["status"] == "needs_rules_csv"
     assert Path(result["manifest"]).exists()
@@ -43,7 +47,10 @@ def test_workflow_JSON初回実行ではCSV雛形を作って止まる(tmp_path:
     assert not (tmp_path / "rules.sqlite").exists()
 
 
-def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(tmp_path: Path) -> None:
+def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
+    tmp_path: Path,
+    fake_url_reader_factory: Callable[[dict[str, bytes]], Callable[[str], object]],
+) -> None:
     fixture_dir = Path(__file__).with_name("fixtures")
     workflow_path = tmp_path / "workflow.json"
     workflow_path.write_text(
@@ -78,29 +85,8 @@ def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
     }
     config = load_workflow_config(workflow_path)
 
-    result = run_workflow(config, url_reader=_fake_url_reader(responses))
+    result = run_workflow(config, url_reader=fake_url_reader_factory(responses))
 
     assert result["status"] == "completed"
     assert Path(result["snapshot_json"]).exists()
     assert Path(result["sqlite_output"]).exists()
-
-
-def _fake_url_reader(responses: dict[str, bytes]):
-    def _reader(url: str) -> _FakeResponse:
-        return _FakeResponse(responses[url])
-
-    return _reader
-
-
-class _FakeResponse:
-    def __init__(self, body: bytes) -> None:
-        self._body = body
-
-    def __enter__(self) -> _FakeResponse:
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        return None
-
-    def read(self) -> bytes:
-        return self._body

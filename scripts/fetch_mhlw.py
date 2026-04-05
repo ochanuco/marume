@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-import urllib.request
 from pathlib import Path
 
 from marume_data.fetch import fetch_mhlw_dpc_assets
+from marume_data.http import url_reader_with_timeout
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,17 +24,11 @@ def main() -> int:
     manifest = fetch_mhlw_dpc_assets(
         output_dir=args.output_dir,
         page_url=args.url,
-        url_reader=_url_reader_with_timeout,  # noqa: S310
+        url_reader=url_reader_with_timeout,
     )
     print(args.output_dir / manifest["page_path"])
     for asset in manifest["assets"]:
         print(args.output_dir / asset["path"])
     return 0
-
-
-def _url_reader_with_timeout(url: str):
-    return urllib.request.urlopen(url, timeout=10)  # noqa: S310
-
-
 if __name__ == "__main__":
     raise SystemExit(main())
