@@ -1,6 +1,10 @@
 ## marume local workspace
 .local/
 
+## SQLite artifacts
+*.sqlite
+!/rules/.gitkeep
+
 ## Go build outputs
 /marume
 *.test
