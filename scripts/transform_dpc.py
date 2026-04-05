@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from marume_data.fetch import load_manifest, resolve_page_path, resolve_rules_csv_path
+from marume_data.transform import parse_mhlw_dpc_page, write_snapshot_from_sources
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +39,6 @@ def main() -> int:
     """Transform fetched MHLW assets into one normalized snapshot JSON file."""
 
     args = parse_args()
-    from marume_data.transform import parse_mhlw_dpc_page, write_snapshot_from_sources
 
     try:
         input_path = _resolve_input_path(args.input, args.manifest)
