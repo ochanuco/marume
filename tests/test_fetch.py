@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from marume_data.fetch import fetch_mhlw_dpc_assets, resolve_latest_pdf_path
+from marume_data.fetch import fetch_mhlw_dpc_assets, resolve_latest_asset_path
 
 
 def test_厚労省ページとDPC_PDFを安定した保存名で取得できる(
@@ -71,7 +71,7 @@ def test_manifestから正式版PDFを解決できる(
         url_reader=fake_url_reader_factory(responses),
     )
 
-    resolved = resolve_latest_pdf_path(tmp_path / "manifest.json")
+    resolved = resolve_latest_asset_path(tmp_path / "manifest.json")
     assert resolved == tmp_path / "dpc_official_20260318_001234568.pdf"
 
 

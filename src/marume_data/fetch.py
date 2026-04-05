@@ -35,7 +35,7 @@ class DownloadedAsset:
 
 
 def fetch_mhlw_dpc_assets(output_dir: Path, page_url: str, url_reader: URLReader) -> dict[str, object]:
-    """Fetch the MHLW page and linked DPC PDFs into a raw asset directory."""
+    """Fetch the MHLW page and linked DPC source assets into a raw asset directory."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     html_bytes = _read_bytes(url_reader, page_url)
@@ -45,7 +45,7 @@ def fetch_mhlw_dpc_assets(output_dir: Path, page_url: str, url_reader: URLReader
     metadata = parse_mhlw_dpc_page(html=html_bytes.decode("utf-8"), base_url=page_url)
     downloaded_assets: list[DownloadedAsset] = []
     for link in metadata.dpc_links:
-        asset = _download_pdf_asset(output_dir=output_dir, link=link, url_reader=url_reader)
+        asset = _download_asset(output_dir=output_dir, link=link, url_reader=url_reader)
         downloaded_assets.append(asset)
 
     manifest = {
@@ -100,14 +100,14 @@ def resolve_rules_csv_path(manifest_path: Path) -> Path | None:
     return None
 
 
-def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path | None:
-    """Resolve the newest PDF path of a given kind from a manifest."""
+def resolve_latest_asset_path(manifest_path: Path, kind: str = "official") -> Path | None:
+    """Resolve the newest DPC source asset path of a given kind from a manifest."""
 
     manifest = load_manifest(manifest_path)
     matched_assets = [
         asset
         for asset in manifest.get("assets", [])
-        if asset.get("kind") == kind and str(asset.get("path", "")).endswith(".pdf")
+        if asset.get("kind") == kind
     ]
     if not matched_assets:
         return None
@@ -115,13 +115,14 @@ def resolve_latest_pdf_path(manifest_path: Path, kind: str = "official") -> Path
     return manifest_path.parent / str(matched_assets[0]["path"])
 
 
-def _download_pdf_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
-    """Download one linked PDF and return its manifest entry."""
+def _download_asset(output_dir: Path, link: DPCSourceLink, url_reader: URLReader) -> DownloadedAsset:
+    """Download one linked DPC source asset and return its manifest entry."""
 
     kind = _classify_link_kind(link.label)
     updated_suffix = (link.updated_at or "unknown").replace("-", "")
     identifier = _build_asset_identifier(link.url)
-    filename = f"dpc_{kind}_{updated_suffix}_{identifier}.pdf"
+    suffix = _build_asset_suffix(link.url)
+    filename = f"dpc_{kind}_{updated_suffix}_{identifier}{suffix}"
     file_path = output_dir / filename
     file_path.write_bytes(_read_bytes(url_reader, link.url))
     return DownloadedAsset(
@@ -157,3 +158,12 @@ def _build_asset_identifier(url: str) -> str:
     if path.stem:
         return path.stem
     return "asset"
+
+
+def _build_asset_suffix(url: str) -> str:
+    """Build a filename suffix from the source URL, defaulting to .bin."""
+
+    suffix = Path(urlparse(url).path).suffix.lower()
+    if suffix:
+        return suffix
+    return ".bin"

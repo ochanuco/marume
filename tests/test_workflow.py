@@ -4,10 +4,12 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+from tests.helpers import build_sample_dpc_workbook_bytes
+
 from marume_data.workflow import load_workflow_config, run_workflow
 
 
-def test_workflow_JSON初回実行ではCSV雛形を作って止まる(
+def test_workflow_JSON初回実行で抽出からSQLite生成まで進める(
     tmp_path: Path,
     fake_url_reader_factory: Callable[[dict[str, bytes]], Callable[[str], object]],
 ) -> None:
@@ -30,21 +32,28 @@ def test_workflow_JSON初回実行ではCSV雛形を作って止まる(
         encoding="utf-8",
     )
 
-    html = (fixture_dir / "mhlw_dpc_page.html").read_bytes()
+    html = (
+        (fixture_dir / "mhlw_dpc_page.html")
+        .read_text(encoding="utf-8")
+        .replace("001234567.pdf", "001234567.xlsx")
+        .replace("001234568.pdf", "001234568.xlsx")
+        .encode("utf-8")
+    )
+    workbook = build_sample_dpc_workbook_bytes()
     responses = {
         "https://example.com/mhlw_dpc_page.html": html,
-        "https://example.com/content/12404000/001234567.pdf": b"%PDF-provisional",
-        "https://example.com/content/12404000/001234568.pdf": b"%PDF-official",
+        "https://example.com/content/12404000/001234567.xlsx": workbook,
+        "https://example.com/content/12404000/001234568.xlsx": workbook,
     }
     config = load_workflow_config(workflow_path)
 
     result = run_workflow(config, url_reader=fake_url_reader_factory(responses))
 
-    assert result["status"] == "needs_rules_csv"
+    assert result["status"] == "completed"
     assert Path(result["manifest"]).exists()
     assert Path(result["rules_csv"]).exists()
-    assert not (tmp_path / "snapshot.json").exists()
-    assert not (tmp_path / "rules.sqlite").exists()
+    assert Path(result["snapshot_json"]).exists()
+    assert Path(result["sqlite_output"]).exists()
 
 
 def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
@@ -77,11 +86,18 @@ def test_workflow_JSONに実ルールCSVがあれば最後まで実行できる(
         encoding="utf-8",
     )
 
-    html = (fixture_dir / "mhlw_dpc_page.html").read_bytes()
+    html = (
+        (fixture_dir / "mhlw_dpc_page.html")
+        .read_text(encoding="utf-8")
+        .replace("001234567.pdf", "001234567.xlsx")
+        .replace("001234568.pdf", "001234568.xlsx")
+        .encode("utf-8")
+    )
+    workbook = build_sample_dpc_workbook_bytes()
     responses = {
         "https://example.com/mhlw_dpc_page.html": html,
-        "https://example.com/content/12404000/001234567.pdf": b"%PDF-provisional",
-        "https://example.com/content/12404000/001234568.pdf": b"%PDF-official",
+        "https://example.com/content/12404000/001234567.xlsx": workbook,
+        "https://example.com/content/12404000/001234568.xlsx": workbook,
     }
     config = load_workflow_config(workflow_path)
 
