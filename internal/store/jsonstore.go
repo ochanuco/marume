@@ -36,6 +36,8 @@ type JSONRuleStore struct {
 	path string
 }
 
+var _ ReadableRuleStore = (*JSONRuleStore)(nil)
+
 // NewJSONRuleStore creates a strict JSON-backed rule store for a single rule snapshot file.
 func NewJSONRuleStore(path string) (*JSONRuleStore, error) {
 	if path == "" {

@@ -30,3 +30,20 @@ func TestLoadRuleSetは年度不一致で専用エラーを返す(t *testing.T) 
 		t.Fatalf("年度不一致は store.ErrFiscalYearMismatch を期待しましたが、実際は %v でした", err)
 	}
 }
+
+func TestNewRuleStoreはJSON拡張子からJSONRuleStoreを選ぶ(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("テストファイルのパス解決に失敗しました")
+	}
+	rulesPath := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "rules", "rules-2026.json")
+
+	ruleStore, err := store.NewRuleStore(rulesPath)
+	if err != nil {
+		t.Fatalf("NewRuleStore の作成に失敗しました: %v", err)
+	}
+
+	if _, ok := ruleStore.(*store.JSONRuleStore); !ok {
+		t.Fatalf("JSON 拡張子では *store.JSONRuleStore を期待しましたが、実際は %T でした", ruleStore)
+	}
+}

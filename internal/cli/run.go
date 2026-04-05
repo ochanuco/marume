@@ -22,7 +22,8 @@ var (
 	errRuleRuntime  = errors.New("ルール実行エラー")
 )
 
-const defaultRulePath = "rules/rules.json"
+const defaultRulePath = "rules/rules-2026.sqlite"
+const legacyDefaultRulePath = "rules/rules.json"
 
 // Version is the CLI version and may be overridden at build time with -ldflags.
 var Version = "dev"
@@ -90,7 +91,7 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 	}
 
 	inputPath := flags.String("input", "-", "入力JSONファイルのパス。標準入力を使う場合は -")
-	rulesPath := flags.String("rules", defaultRulePath, "ルールセットJSONのパス")
+	rulesPath := flags.String("rules", defaultRulePath, "ルールスナップショットのパス (JSON または SQLite)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -109,7 +110,7 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return err
 	}
 
-	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	ruleStore, err := store.NewRuleStore(resolveRulesPath(flags, *rulesPath))
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
@@ -137,7 +138,7 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 
 	inputPath := flags.String("input", "-", "入力JSONLファイルのパス。標準入力を使う場合は -")
 	outputPath := flags.String("output", "-", "出力JSONLファイルのパス。標準出力に出す場合は -")
-	rulesPath := flags.String("rules", defaultRulePath, "ルールセットJSONのパス")
+	rulesPath := flags.String("rules", defaultRulePath, "ルールスナップショットのパス (JSON または SQLite)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -157,7 +158,7 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 	}
 	defer cleanupInput()
 
-	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	ruleStore, err := store.NewRuleStore(resolveRulesPath(flags, *rulesPath))
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
@@ -225,7 +226,7 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	}
 
 	inputPath := flags.String("input", "-", "入力JSONファイルのパス。標準入力を使う場合は -")
-	rulesPath := flags.String("rules", defaultRulePath, "ルールセットJSONのパス")
+	rulesPath := flags.String("rules", defaultRulePath, "ルールスナップショットのパス (JSON または SQLite)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -244,7 +245,7 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		return err
 	}
 
-	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	ruleStore, err := store.NewRuleStore(resolveRulesPath(flags, *rulesPath))
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
@@ -317,7 +318,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		flags.PrintDefaults()
 	}
 
-	rulesPath := flags.String("rules", defaultRulePath, "ルールセットJSONのパス")
+	rulesPath := flags.String("rules", defaultRulePath, "ルールスナップショットのパス (JSON または SQLite)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -328,7 +329,7 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ruleStore, err := store.NewJSONRuleStore(*rulesPath)
+	ruleStore, err := store.NewRuleStore(resolveRulesPath(flags, *rulesPath))
 	if err != nil {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
@@ -422,6 +423,32 @@ func openOutput(path string, stdout io.Writer) (io.Writer, func() error, error) 
 		return nil, nil, err
 	}
 	return file, file.Close, nil
+}
+
+// resolveRulesPath keeps default rule loading backward compatible:
+// explicit --rules wins; otherwise prefer the default SQLite path, then the legacy JSON path.
+// flagWasProvided is used so an explicit --rules rules/rules-2026.sqlite keeps the original path.
+func resolveRulesPath(flags *flag.FlagSet, requestedPath string) string {
+	if requestedPath != defaultRulePath || flagWasProvided(flags, "rules") {
+		return requestedPath
+	}
+	if _, err := os.Stat(requestedPath); err == nil {
+		return requestedPath
+	}
+	if _, err := os.Stat(legacyDefaultRulePath); err == nil {
+		return legacyDefaultRulePath
+	}
+	return requestedPath
+}
+
+func flagWasProvided(flags *flag.FlagSet, name string) bool {
+	provided := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			provided = true
+		}
+	})
+	return provided
 }
 
 // classifyBatchLine classifies one JSONL line and normalizes errors into batch output.
