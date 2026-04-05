@@ -1,6 +1,6 @@
 # marume
 
-DPC診断群分類の Go 製 CLI POC です。データ基盤より先に、ローカルで症例 JSON を評価できる最小構成を置いています。
+診断群分類(DPC)の Go 製 CLI POC です。データ基盤より先に、ローカルで症例 JSON を評価できる最小構成を置いています。
 
 現時点では SQLite ではなく JSON ルールセットを読んでいます。`RuleStore` 抽象を挟んでいるので、後から SQLite 実装に差し替える前提です。
 
@@ -41,6 +41,9 @@ uv run python scripts/run_workflow.py --workflow workflows/dpc_2026_mhlw.json
 初回実行では `dpc_rules.csv` の雛形を作って停止します。
 抽出済みの `dpc_rules.csv` を配置したあと、同じ workflow を再実行すると snapshot JSON と SQLite まで進みます。
 
+生成途中の raw / intermediate / SQLite は `.local/` 配下に置きます。
+実行時に CLI から参照する採用済みの成果物は `rules/` 配下に置く前提です。
+
 最小の Python データパイプラインは以下の 4 段階です。
 
 ```bash
@@ -48,6 +51,12 @@ uv run python scripts/fetch_mhlw.py --url https://www.mhlw.go.jp/stf/newpage_677
 uv run python scripts/extract_dpc_pdf.py --manifest .local/raw/mhlw/manifest.json --output .local/raw/mhlw/dpc_rules.csv
 uv run python scripts/transform_dpc.py --manifest .local/raw/mhlw/manifest.json --fiscal-year 2026 --output .local/intermediate/dpc-2026.json
 uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json --output .local/sqlite/rules-2026.sqlite
+```
+
+採用する SQLite を実行用に昇格させる場合は、`rules/` へ配置します。
+
+```bash
+cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 ```
 
 `transform_dpc.py` は `--fiscal-year` を必須にしています。
@@ -62,6 +71,8 @@ uv run python scripts/build_sqlite.py --input .local/intermediate/dpc-2026.json 
 ./marume validate --input testdata/cases/case-ok.json
 ./marume version --rules testdata/rules/rules-2026.json
 ```
+
+SQLite 対応後は、`--rules rules/rules-2026.sqlite` のように `rules/` 配下の成果物を渡す想定です。
 
 `stdin` から読む場合は `--input -` を使います。
 `classify-batch` は `JSONL` を 1 行ずつ読み、結果も `JSONL` で返します。
