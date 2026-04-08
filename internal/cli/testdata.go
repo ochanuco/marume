@@ -489,11 +489,11 @@ func writeJSONToPath(path string, stdout io.Writer, value any) error {
 func writePrettyJSONFile(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return fmt.Errorf("%w: JSONの生成に失敗しました: %v", errInvalidInput, err)
+		return fmt.Errorf("%w: JSONの生成に失敗しました: %v", errRuleRuntime, err)
 	}
 	data = append(data, '\n')
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("%w: 出力ファイルを書き込めません: %v", errInvalidInput, err)
+		return fmt.Errorf("%w: 出力ファイルを書き込めません: %v", errRuleRuntime, err)
 	}
 	return nil
 }
