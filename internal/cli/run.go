@@ -350,6 +350,9 @@ func runSchema(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%w: %v", errInvalidInput, err)
 	}
 	if *listOnly {
+		if flags.NArg() > 0 {
+			return rejectExtraArgs(flags)
+		}
 		return writeJSON(stdout, map[string]any{"schemas": listSchemaNames()})
 	}
 	if flags.NArg() == 0 {

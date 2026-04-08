@@ -261,6 +261,21 @@ func TestSchemaはcaseInputのJSONSchemaを返す(t *testing.T) {
 	if _, ok := properties["case_id"]; !ok {
 		t.Fatalf("schema に case_id プロパティがありません: %v", properties)
 	}
+	if result["additionalProperties"] != false {
+		t.Fatalf("schema の additionalProperties は false を期待しましたが、実際は %v でした", result["additionalProperties"])
+	}
+	caseID, ok := properties["case_id"].(map[string]any)
+	if !ok || caseID["minLength"] != float64(1) {
+		t.Fatalf("case_id の minLength は 1 を期待しましたが、実際は %v でした", properties["case_id"])
+	}
+	fiscalYear, ok := properties["fiscal_year"].(map[string]any)
+	if !ok || fiscalYear["minimum"] != float64(1) {
+		t.Fatalf("fiscal_year の minimum は 1 を期待しましたが、実際は %v でした", properties["fiscal_year"])
+	}
+	age, ok := properties["age"].(map[string]any)
+	if !ok || age["minimum"] != float64(0) {
+		t.Fatalf("age の minimum は 0 を期待しましたが、実際は %v でした", properties["age"])
+	}
 }
 
 func TestSchemaListは利用可能なスキーマ名を返す(t *testing.T) {
@@ -285,6 +300,25 @@ func TestSchemaListは利用可能なスキーマ名を返す(t *testing.T) {
 	schemas, ok := result["schemas"].([]any)
 	if !ok || len(schemas) == 0 {
 		t.Fatalf("schema --list は schemas を返す想定でしたが、実際は %v でした", result["schemas"])
+	}
+}
+
+func TestSchemaListは余分な引数を拒否する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"schema", "--list", "extra"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("schema --list extra は入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("schema --list extra の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
 	}
 }
 

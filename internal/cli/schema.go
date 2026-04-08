@@ -23,6 +23,8 @@ type schemaField struct {
 	Description string
 	Required    bool
 	ItemsType   string
+	MinLength   *int
+	Minimum     *int
 }
 
 func (d schemaDoc) jsonSchema() map[string]any {
@@ -36,6 +38,12 @@ func (d schemaDoc) jsonSchema() map[string]any {
 		if field.Type == "array" && field.ItemsType != "" {
 			property["items"] = map[string]any{"type": field.ItemsType}
 		}
+		if field.MinLength != nil {
+			property["minLength"] = *field.MinLength
+		}
+		if field.Minimum != nil {
+			property["minimum"] = *field.Minimum
+		}
 		properties[field.Name] = property
 		if field.Required {
 			required = append(required, field.Name)
@@ -43,13 +51,14 @@ func (d schemaDoc) jsonSchema() map[string]any {
 	}
 
 	schema := map[string]any{
-		"$schema":     "https://json-schema.org/draft/2020-12/schema",
-		"$id":         fmt.Sprintf("https://marume.dev/schema/%s.json", d.Name),
-		"title":       d.Title,
-		"description": d.Description,
-		"type":        d.Type,
-		"properties":  properties,
-		"example":     d.Example,
+		"$schema":              "https://json-schema.org/draft/2020-12/schema",
+		"$id":                  fmt.Sprintf("https://marume.dev/schema/%s.json", d.Name),
+		"title":                d.Title,
+		"description":          d.Description,
+		"type":                 d.Type,
+		"properties":           properties,
+		"example":              d.Example,
+		"additionalProperties": false,
 	}
 	if len(required) > 0 {
 		slices.Sort(required)
@@ -96,11 +105,11 @@ var caseInputSchema = schemaDoc{
 	Description: "症例入力JSONです。classify / explain / validate と classify-batch の各行で共通です。",
 	Type:        "object",
 	Fields: []schemaField{
-		{Name: "case_id", Type: "string", Required: true, Description: "症例を識別するIDです。"},
-		{Name: "fiscal_year", Type: "integer", Required: true, Description: "症例を評価する年度です。"},
-		{Name: "age", Type: "integer", Description: "患者年齢です。0以上のみ許容します。"},
+		{Name: "case_id", Type: "string", Required: true, MinLength: intPtr(1), Description: "症例を識別するIDです。"},
+		{Name: "fiscal_year", Type: "integer", Required: true, Minimum: intPtr(1), Description: "症例を評価する年度です。"},
+		{Name: "age", Type: "integer", Minimum: intPtr(0), Description: "患者年齢です。0以上のみ許容します。"},
 		{Name: "sex", Type: "string", Description: "患者性別です。現在のPOCでは未指定でも受け付けます。"},
-		{Name: "main_diagnosis", Type: "string", Required: true, Description: "主傷病名コードです。"},
+		{Name: "main_diagnosis", Type: "string", Required: true, MinLength: intPtr(1), Description: "主傷病名コードです。"},
 		{Name: "diagnoses", Type: "array", ItemsType: "string", Description: "診断コード一覧です。"},
 		{Name: "procedures", Type: "array", ItemsType: "string", Description: "手術・処置コード一覧です。"},
 		{Name: "comorbidities", Type: "array", ItemsType: "string", Description: "併存症コード一覧です。"},
@@ -123,7 +132,7 @@ var classifyResultSchema = schemaDoc{
 	Description: "classify のJSON出力です。",
 	Type:        "object",
 	Fields: []schemaField{
-		{Name: "case_id", Type: "string", Required: true, Description: "入力症例IDです。"},
+		{Name: "case_id", Type: "string", Required: true, MinLength: intPtr(1), Description: "入力症例IDです。"},
 		{Name: "dpc_code", Type: "string", Required: true, Description: "分類されたDPCコードです。"},
 		{Name: "version", Type: "string", Required: true, Description: "適用ルールセットのバージョンです。"},
 		{Name: "matched_rule_id", Type: "string", Required: true, Description: "採用されたルールIDです。"},
@@ -222,4 +231,8 @@ var schemaRegistry = map[string]schemaDoc{
 
 func writeSchemaHelp(w io.Writer, doc schemaDoc) {
 	fmt.Fprintln(w, doc.helpText())
+}
+
+func intPtr(v int) *int {
+	return &v
 }
