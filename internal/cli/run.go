@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/ochanuco/marume/internal/domain"
 	"github.com/ochanuco/marume/internal/evaluator"
@@ -47,6 +48,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runClassifyBatch(ctx, args[1:], stdin, stdout, stderr)
 	case "explain":
 		return runExplain(ctx, args[1:], stdin, stdout, stderr)
+	case "schema":
+		return runSchema(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
 	case "version":
@@ -85,6 +88,9 @@ func runClassify(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		fmt.Fprintln(stderr, "使い方: marume classify --input <症例JSON>")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "単一症例を分類し、DPCコードと採用ルールをJSONで返します。")
+		fmt.Fprintln(stderr, "")
+		writeSchemaHelp(stderr, caseInputSchema)
+		fmt.Fprintln(stderr, "出力スキーマ: marume schema classify-result")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
@@ -131,6 +137,11 @@ func runClassifyBatch(ctx context.Context, args []string, stdin io.Reader, stdou
 		fmt.Fprintln(stderr, "使い方: marume classify-batch --input <症例JSONL> [--output <結果JSONL>]")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "複数症例を1行ずつ分類し、結果をJSONLで返します。")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "各行の入力には次のJSONを使います。")
+		fmt.Fprintln(stderr, "")
+		writeSchemaHelp(stderr, caseInputSchema)
+		fmt.Fprintln(stderr, "出力スキーマ: marume schema batch-result")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
@@ -221,6 +232,9 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "候補ルールごとの一致状況と、不一致理由をJSONで返します。")
 		fmt.Fprintln(stderr, "")
+		writeSchemaHelp(stderr, caseInputSchema)
+		fmt.Fprintln(stderr, "出力スキーマ: marume schema explain-result")
+		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
@@ -276,6 +290,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) error
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "入力JSONの最低限の必須項目を検証します。")
 		fmt.Fprintln(stderr, "")
+		writeSchemaHelp(stderr, caseInputSchema)
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
@@ -305,6 +320,52 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) error
 	})
 }
 
+// runSchema prints a JSON schema document for Agent and human inspection.
+func runSchema(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	listOnly := flags.Bool("list", false, "利用可能なスキーマ名を表示する")
+	flags.Usage = func() {
+		fmt.Fprintln(stderr, "使い方: marume schema <名前>")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "JSON Schema を標準出力へ返します。")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "利用可能なスキーマ:")
+		for _, name := range listSchemaNames() {
+			fmt.Fprintf(stderr, "  %s\n", name)
+		}
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "例:")
+		fmt.Fprintln(stderr, "  marume schema case-input")
+		fmt.Fprintln(stderr, "  marume schema classify-result")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "フラグ:")
+		flags.PrintDefaults()
+	}
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	if *listOnly {
+		return writeJSON(stdout, map[string]any{"schemas": listSchemaNames()})
+	}
+	if flags.NArg() == 0 {
+		return fmt.Errorf("%w: schema にはスキーマ名を1つ指定してください", errInvalidInput)
+	}
+	if flags.NArg() > 1 {
+		return rejectExtraArgs(flags)
+	}
+
+	doc, ok := schemaRegistry[flags.Arg(0)]
+	if !ok {
+		return fmt.Errorf("%w: 不明なスキーマ %q", errInvalidInput, flags.Arg(0))
+	}
+	return writeJSON(stdout, doc.jsonSchema())
+}
+
 // runVersion prints CLI and rule snapshot metadata.
 func runVersion(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("version", flag.ContinueOnError)
@@ -313,6 +374,8 @@ func runVersion(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stderr, "使い方: marume version")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "CLIバージョンとルールセットのバージョン情報をJSONで返します。")
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, "出力スキーマ: marume schema version-result")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
@@ -626,6 +689,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  classify   単一症例を分類する")
 	fmt.Fprintln(w, "  classify-batch 複数症例を一括分類する")
 	fmt.Fprintln(w, "  explain    候補ルールと判定理由を表示する")
+	fmt.Fprintln(w, "  schema     入出力JSON Schemaを表示する")
 	fmt.Fprintln(w, "  validate   入力JSONを検証する")
 	fmt.Fprintln(w, "  version    CLIとルールセットのバージョンを表示する")
 	fmt.Fprintln(w, "")
@@ -633,8 +697,18 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  marume classify --input case.json")
 	fmt.Fprintln(w, "  marume classify-batch --input cases.jsonl --output results.jsonl")
 	fmt.Fprintln(w, "  marume explain --input case.json")
+	fmt.Fprintln(w, "  marume schema case-input")
 	fmt.Fprintln(w, "  marume validate --input case.json")
 	fmt.Fprintln(w, "  marume version")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "各コマンドの詳細は `marume <コマンド> --help` で確認できます。")
+}
+
+func listSchemaNames() []string {
+	names := make([]string, 0, len(schemaRegistry))
+	for name := range schemaRegistry {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
 }
