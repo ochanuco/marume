@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,83 +14,19 @@ import (
 	"strings"
 
 	"github.com/ochanuco/marume/internal/domain"
+	"github.com/ochanuco/marume/internal/evaluator"
+	"github.com/ochanuco/marume/internal/store"
 )
 
-var testdataCasePresets = map[string]domain.CaseInput{
-	"ok": {
-		CaseID:        "123",
-		FiscalYear:    2026,
-		Age:           intPtr(72),
-		Sex:           "M",
-		MainDiagnosis: "I219",
-		Diagnoses:     []string{"I219"},
-		Procedures:    []string{"K549"},
-		Comorbidities: []string{},
-	},
-}
+var (
+	testdataCasePresets  = []string{"ok"}
+	testdataBatchPresets = []string{"basic"}
+	testdataRulesPresets = []string{"minimal"}
+)
 
-var testdataBatchPresets = map[string][]domain.CaseInput{
-	"basic": {
-		testdataCasePresets["ok"],
-		{
-			CaseID:        "124",
-			FiscalYear:    2026,
-			Age:           intPtr(75),
-			Sex:           "F",
-			MainDiagnosis: "I219",
-			Diagnoses:     []string{"I219"},
-			Procedures:    []string{},
-			Comorbidities: []string{},
-		},
-	},
-}
+const testdataMinimalRuleCount = 2
 
-var testdataRulesPresets = map[string]domain.RuleSet{
-	"minimal": {
-		FiscalYear:  2026,
-		RuleVersion: "2026.0.0-poc",
-		BuildID:     "sample-minimal",
-		BuiltAt:     "2026-04-08T00:00:00+09:00",
-		Rules: []domain.Rule{
-			{
-				ID:       "R-2026-00010",
-				Priority: 10,
-				DPCCode:  "040080xx99x0xx",
-				Conditions: []domain.Condition{
-					{
-						Type:     "main_diagnosis",
-						Operator: "equals",
-						Values:   []string{"I219"},
-					},
-					{
-						Type:     "procedures",
-						Operator: "contains_any",
-						Values:   []string{"K549"},
-					},
-				},
-			},
-			{
-				ID:       "R-2026-00020",
-				Priority: 20,
-				DPCCode:  "040081xx99x0xx",
-				Conditions: []domain.Condition{
-					{
-						Type:     "main_diagnosis",
-						Operator: "equals",
-						Values:   []string{"I219"},
-					},
-					{
-						Type:     "age",
-						Operator: "gte",
-						IntValue: intPtr(70),
-					},
-				},
-			},
-		},
-	},
-}
-
-func runTestdata(args []string, stdout, stderr io.Writer) error {
+func runTestdata(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printTestdataUsage(stderr)
 		return fmt.Errorf("%w: testdata にはサブコマンドを指定してください", errInvalidInput)
@@ -99,34 +37,35 @@ func runTestdata(args []string, stdout, stderr io.Writer) error {
 		printTestdataUsage(stdout)
 		return nil
 	case "case":
-		return runTestdataCase(args[1:], stdout, stderr)
+		return runTestdataCase(ctx, args[1:], stdout, stderr)
 	case "batch":
-		return runTestdataBatch(args[1:], stdout, stderr)
+		return runTestdataBatch(ctx, args[1:], stdout, stderr)
 	case "rules":
-		return runTestdataRules(args[1:], stdout, stderr)
+		return runTestdataRules(ctx, args[1:], stdout, stderr)
 	case "write":
-		return runTestdataWrite(args[1:], stdout, stderr)
+		return runTestdataWrite(ctx, args[1:], stdout, stderr)
 	default:
 		printTestdataUsage(stderr)
 		return fmt.Errorf("%w: 不明な testdata サブコマンド %q", errInvalidInput, args[0])
 	}
 }
 
-func runTestdataCase(args []string, stdout, stderr io.Writer) error {
+func runTestdataCase(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("testdata case", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "使い方: marume testdata case [--preset ok] [--output <path>]")
+		fmt.Fprintln(stderr, "使い方: marume testdata case [--preset ok] [--rules <path>] [--output <path>]")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "単一症例のサンプルJSONを生成します。")
+		fmt.Fprintln(stderr, "rules snapshot から単一症例のサンプルJSONを生成します。")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinPresetNames(testdataCasePresets))
+		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinNames(testdataCasePresets))
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
 
 	preset := flags.String("preset", "ok", "生成する症例プリセット名")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -137,29 +76,41 @@ func runTestdataCase(args []string, stdout, stderr io.Writer) error {
 	if err := rejectExtraArgs(flags); err != nil {
 		return err
 	}
+	if !containsName(testdataCasePresets, *preset) {
+		return unknownPresetError("case", *preset, testdataCasePresets)
+	}
 
-	value, ok := testdataCasePresets[*preset]
-	if !ok {
-		return unknownPresetError("case", *preset, presetNames(testdataCasePresets))
+	sourceRuleSet, err := loadTestdataSourceRuleSet(ctx, flags, *rulesPath)
+	if err != nil {
+		return err
+	}
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	if err != nil {
+		return err
+	}
+	value, err := buildCasePreset(*preset, sampleRuleSet)
+	if err != nil {
+		return err
 	}
 	return writeJSONToPath(*outputPath, stdout, value)
 }
 
-func runTestdataBatch(args []string, stdout, stderr io.Writer) error {
+func runTestdataBatch(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("testdata batch", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "使い方: marume testdata batch [--preset basic] [--output <path>]")
+		fmt.Fprintln(stderr, "使い方: marume testdata batch [--preset basic] [--rules <path>] [--output <path>]")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "複数症例のサンプルJSONLを生成します。")
+		fmt.Fprintln(stderr, "rules snapshot から複数症例のサンプルJSONLを生成します。")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinPresetNames(testdataBatchPresets))
+		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinNames(testdataBatchPresets))
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
 
 	preset := flags.String("preset", "basic", "生成するバッチプリセット名")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -170,29 +121,41 @@ func runTestdataBatch(args []string, stdout, stderr io.Writer) error {
 	if err := rejectExtraArgs(flags); err != nil {
 		return err
 	}
+	if !containsName(testdataBatchPresets, *preset) {
+		return unknownPresetError("batch", *preset, testdataBatchPresets)
+	}
 
-	value, ok := testdataBatchPresets[*preset]
-	if !ok {
-		return unknownPresetError("batch", *preset, presetNames(testdataBatchPresets))
+	sourceRuleSet, err := loadTestdataSourceRuleSet(ctx, flags, *rulesPath)
+	if err != nil {
+		return err
+	}
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	if err != nil {
+		return err
+	}
+	value, err := buildBatchPreset(*preset, sampleRuleSet)
+	if err != nil {
+		return err
 	}
 	return writeJSONLToPath(*outputPath, stdout, value)
 }
 
-func runTestdataRules(args []string, stdout, stderr io.Writer) error {
+func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("testdata rules", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "使い方: marume testdata rules [--preset minimal] [--output <path>]")
+		fmt.Fprintln(stderr, "使い方: marume testdata rules [--preset minimal] [--rules <path>] [--output <path>]")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "ルールセットのサンプルJSONを生成します。")
+		fmt.Fprintln(stderr, "rules snapshot からサンプル用の最小ルールセットJSONを生成します。")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinPresetNames(testdataRulesPresets))
+		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinNames(testdataRulesPresets))
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
 
 	preset := flags.String("preset", "minimal", "生成するルールセットプリセット名")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -203,21 +166,28 @@ func runTestdataRules(args []string, stdout, stderr io.Writer) error {
 	if err := rejectExtraArgs(flags); err != nil {
 		return err
 	}
+	if !containsName(testdataRulesPresets, *preset) {
+		return unknownPresetError("rules", *preset, testdataRulesPresets)
+	}
 
-	value, ok := testdataRulesPresets[*preset]
-	if !ok {
-		return unknownPresetError("rules", *preset, presetNames(testdataRulesPresets))
+	sourceRuleSet, err := loadTestdataSourceRuleSet(ctx, flags, *rulesPath)
+	if err != nil {
+		return err
+	}
+	value, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	if err != nil {
+		return err
 	}
 	return writeJSONToPath(*outputPath, stdout, value)
 }
 
-func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
+func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("testdata write", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "使い方: marume testdata write --dir <path>")
+		fmt.Fprintln(stderr, "使い方: marume testdata write --dir <path> [--rules <path>]")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "分類デモに使える sample 一式をディレクトリへ書き出します。")
+		fmt.Fprintln(stderr, "rules snapshot から分類デモに使える sample 一式をディレクトリへ書き出します。")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "生成物:")
 		fmt.Fprintln(stderr, "  case-ok.json")
@@ -229,6 +199,7 @@ func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
 	}
 
 	dir := flags.String("dir", ".local/marume-sample", "サンプル一式の出力先ディレクトリ")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	casePreset := flags.String("case-preset", "ok", "case 用プリセット名")
 	batchPreset := flags.String("batch-preset", "basic", "batch 用プリセット名")
 	rulesPreset := flags.String("rules-preset", "minimal", "rules 用プリセット名")
@@ -244,18 +215,31 @@ func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
 	if *dir == "" {
 		return fmt.Errorf("%w: dir は必須です", errInvalidInput)
 	}
+	if !containsName(testdataCasePresets, *casePreset) {
+		return unknownPresetError("case", *casePreset, testdataCasePresets)
+	}
+	if !containsName(testdataBatchPresets, *batchPreset) {
+		return unknownPresetError("batch", *batchPreset, testdataBatchPresets)
+	}
+	if !containsName(testdataRulesPresets, *rulesPreset) {
+		return unknownPresetError("rules", *rulesPreset, testdataRulesPresets)
+	}
 
-	caseValue, ok := testdataCasePresets[*casePreset]
-	if !ok {
-		return unknownPresetError("case", *casePreset, presetNames(testdataCasePresets))
+	sourceRuleSet, err := loadTestdataSourceRuleSet(ctx, flags, *rulesPath)
+	if err != nil {
+		return err
 	}
-	batchValue, ok := testdataBatchPresets[*batchPreset]
-	if !ok {
-		return unknownPresetError("batch", *batchPreset, presetNames(testdataBatchPresets))
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	if err != nil {
+		return err
 	}
-	rulesValue, ok := testdataRulesPresets[*rulesPreset]
-	if !ok {
-		return unknownPresetError("rules", *rulesPreset, presetNames(testdataRulesPresets))
+	caseValue, err := buildCasePreset(*casePreset, sampleRuleSet)
+	if err != nil {
+		return err
+	}
+	batchValue, err := buildBatchPreset(*batchPreset, sampleRuleSet)
+	if err != nil {
+		return err
 	}
 
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
@@ -264,7 +248,7 @@ func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
 
 	casePath := filepath.Join(*dir, fmt.Sprintf("case-%s.json", *casePreset))
 	batchPath := filepath.Join(*dir, fmt.Sprintf("cases-%s.jsonl", *batchPreset))
-	rulesPath := filepath.Join(*dir, fmt.Sprintf("rules-%s.json", *rulesPreset))
+	rulesOutputPath := filepath.Join(*dir, fmt.Sprintf("rules-%s.json", *rulesPreset))
 
 	if err := writePrettyJSONFile(casePath, caseValue); err != nil {
 		return err
@@ -272,7 +256,7 @@ func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
 	if err := writeJSONLFile(batchPath, batchValue); err != nil {
 		return err
 	}
-	if err := writePrettyJSONFile(rulesPath, rulesValue); err != nil {
+	if err := writePrettyJSONFile(rulesOutputPath, sampleRuleSet); err != nil {
 		return err
 	}
 
@@ -281,9 +265,208 @@ func runTestdataWrite(args []string, stdout, stderr io.Writer) error {
 		"files": map[string]string{
 			"case":  casePath,
 			"batch": batchPath,
-			"rules": rulesPath,
+			"rules": rulesOutputPath,
 		},
 	})
+}
+
+func loadTestdataSourceRuleSet(ctx context.Context, flags *flag.FlagSet, requestedPath string) (domain.RuleSet, error) {
+	ruleStore, err := store.NewRuleStore(resolveRulesPath(flags, requestedPath))
+	if err != nil {
+		return domain.RuleSet{}, fmt.Errorf("%w: %v", errInvalidInput, err)
+	}
+	ruleSet, err := ruleStore.ReadRuleSet(ctx)
+	if err != nil {
+		return domain.RuleSet{}, err
+	}
+	if err := evaluator.ValidateRuleSet(ruleSet); err != nil {
+		return domain.RuleSet{}, err
+	}
+	return ruleSet, nil
+}
+
+func buildTestdataRuleSet(source domain.RuleSet, maxRules int) (domain.RuleSet, error) {
+	selected := make([]domain.Rule, 0, maxRules)
+	for _, rule := range sortRulesForTestdata(source.Rules) {
+		if len(selected) == maxRules {
+			break
+		}
+		if _, err := synthesizeCaseForRule(source.FiscalYear, rule, fmt.Sprintf("sample-%s", rule.ID)); err != nil {
+			continue
+		}
+		selected = append(selected, rule)
+	}
+	if len(selected) == 0 {
+		return domain.RuleSet{}, fmt.Errorf("%w: サンプル生成に使えるルールが見つかりません", errInvalidInput)
+	}
+	return domain.RuleSet{
+		FiscalYear:  source.FiscalYear,
+		RuleVersion: source.RuleVersion,
+		BuildID:     source.BuildID,
+		BuiltAt:     source.BuiltAt,
+		Rules:       selected,
+	}, nil
+}
+
+func buildCasePreset(preset string, ruleSet domain.RuleSet) (domain.CaseInput, error) {
+	switch preset {
+	case "ok":
+		if len(ruleSet.Rules) == 0 {
+			return domain.CaseInput{}, fmt.Errorf("%w: case サンプル生成に使えるルールがありません", errInvalidInput)
+		}
+		return synthesizeCaseForRule(ruleSet.FiscalYear, ruleSet.Rules[0], "sample-ok")
+	default:
+		return domain.CaseInput{}, unknownPresetError("case", preset, testdataCasePresets)
+	}
+}
+
+func buildBatchPreset(preset string, ruleSet domain.RuleSet) ([]domain.CaseInput, error) {
+	switch preset {
+	case "basic":
+		cases := make([]domain.CaseInput, 0, len(ruleSet.Rules))
+		for idx, rule := range ruleSet.Rules {
+			item, err := synthesizeCaseForRule(ruleSet.FiscalYear, rule, fmt.Sprintf("sample-%02d", idx+1))
+			if err != nil {
+				return nil, err
+			}
+			cases = append(cases, item)
+		}
+		return cases, nil
+	default:
+		return nil, unknownPresetError("batch", preset, testdataBatchPresets)
+	}
+}
+
+func synthesizeCaseForRule(fiscalYear int, rule domain.Rule, caseID string) (domain.CaseInput, error) {
+	input := domain.CaseInput{
+		CaseID:        caseID,
+		FiscalYear:    fiscalYear,
+		Diagnoses:     []string{},
+		Procedures:    []string{},
+		Comorbidities: []string{},
+	}
+
+	var minAge *int
+	var maxAge *int
+
+	for _, condition := range rule.Conditions {
+		switch condition.Type {
+		case "main_diagnosis":
+			if condition.Operator != "equals" || len(condition.Values) == 0 {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の main_diagnosis 条件からサンプルを作れません", errInvalidInput, rule.ID)
+			}
+			input.MainDiagnosis = condition.Values[0]
+		case "diagnoses":
+			if condition.Operator != "contains_any" || len(condition.Values) == 0 {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の diagnoses 条件からサンプルを作れません", errInvalidInput, rule.ID)
+			}
+			input.Diagnoses = uniqueStrings(append(input.Diagnoses, condition.Values[0]))
+		case "procedures":
+			if condition.Operator != "contains_any" || len(condition.Values) == 0 {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の procedures 条件からサンプルを作れません", errInvalidInput, rule.ID)
+			}
+			input.Procedures = uniqueStrings(append(input.Procedures, condition.Values[0]))
+		case "comorbidities":
+			if condition.Operator != "contains_any" || len(condition.Values) == 0 {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の comorbidities 条件からサンプルを作れません", errInvalidInput, rule.ID)
+			}
+			input.Comorbidities = uniqueStrings(append(input.Comorbidities, condition.Values[0]))
+		case "sex":
+			if condition.Operator != "equals" || len(condition.Values) == 0 {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の sex 条件からサンプルを作れません", errInvalidInput, rule.ID)
+			}
+			input.Sex = strings.ToUpper(condition.Values[0])
+		case "age":
+			if condition.IntValue == nil {
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の age 条件に int_value がありません", errInvalidInput, rule.ID)
+			}
+			switch condition.Operator {
+			case "gte":
+				minAge = maxIntPtr(minAge, condition.IntValue)
+			case "lte":
+				maxAge = minIntPtr(maxAge, condition.IntValue)
+			default:
+				return domain.CaseInput{}, fmt.Errorf("%w: rule %s の age 条件 %q からサンプルを作れません", errInvalidInput, rule.ID, condition.Operator)
+			}
+		default:
+			return domain.CaseInput{}, fmt.Errorf("%w: rule %s の条件 %q はサンプル生成対象外です", errInvalidInput, rule.ID, condition.Type)
+		}
+	}
+
+	if input.MainDiagnosis == "" {
+		return domain.CaseInput{}, fmt.Errorf("%w: rule %s に main_diagnosis 条件がありません", errInvalidInput, rule.ID)
+	}
+	if len(input.Diagnoses) == 0 {
+		input.Diagnoses = []string{input.MainDiagnosis}
+	}
+	if minAge != nil || maxAge != nil {
+		age, err := chooseAge(minAge, maxAge, rule.ID)
+		if err != nil {
+			return domain.CaseInput{}, err
+		}
+		input.Age = &age
+	}
+
+	return input, nil
+}
+
+func chooseAge(minAge, maxAge *int, ruleID string) (int, error) {
+	switch {
+	case minAge != nil && maxAge != nil && *minAge > *maxAge:
+		return 0, fmt.Errorf("%w: rule %s の age 条件が矛盾しています", errInvalidInput, ruleID)
+	case minAge != nil:
+		return *minAge, nil
+	case maxAge != nil:
+		return *maxAge, nil
+	default:
+		return 0, fmt.Errorf("%w: rule %s から age を選べません", errInvalidInput, ruleID)
+	}
+}
+
+func maxIntPtr(current, candidate *int) *int {
+	if candidate == nil {
+		return current
+	}
+	if current == nil || *candidate > *current {
+		value := *candidate
+		return &value
+	}
+	return current
+}
+
+func minIntPtr(current, candidate *int) *int {
+	if candidate == nil {
+		return current
+	}
+	if current == nil || *candidate < *current {
+		value := *candidate
+		return &value
+	}
+	return current
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func sortRulesForTestdata(rules []domain.Rule) []domain.Rule {
+	sorted := append([]domain.Rule(nil), rules...)
+	slices.SortFunc(sorted, func(a, b domain.Rule) int {
+		if diff := cmp.Compare(a.Priority, b.Priority); diff != 0 {
+			return diff
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return sorted
 }
 
 func writeJSONToPath(path string, stdout io.Writer, value any) error {
@@ -344,7 +527,7 @@ func writeJSONL(w io.Writer, lines []domain.CaseInput) error {
 func printTestdataUsage(w io.Writer) {
 	fmt.Fprintln(w, "使い方: marume testdata <サブコマンド> [フラグ]")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "README の手順で使えるサンプル入力・ルールセットを生成します。")
+	fmt.Fprintln(w, "README の手順で使えるサンプル入力・ルールセットを、採用済み rules snapshot から生成します。")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "サブコマンド:")
 	fmt.Fprintln(w, "  case    単一症例のサンプルJSONを生成する")
@@ -353,34 +536,22 @@ func printTestdataUsage(w io.Writer) {
 	fmt.Fprintln(w, "  write   classify/explain 用の一式をまとめて書き出す")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "例:")
-	fmt.Fprintln(w, "  marume testdata case --preset ok")
-	fmt.Fprintln(w, "  marume testdata batch --preset basic --output ./cases.jsonl")
-	fmt.Fprintln(w, "  marume testdata rules --preset minimal --output ./rules.json")
-	fmt.Fprintln(w, "  marume testdata write --dir ./.local/marume-sample")
+	fmt.Fprintln(w, "  marume testdata case --rules rules/rules-2026.sqlite --preset ok")
+	fmt.Fprintln(w, "  marume testdata batch --rules rules/rules-2026.sqlite --preset basic --output ./cases.jsonl")
+	fmt.Fprintln(w, "  marume testdata rules --rules rules/rules-2026.sqlite --preset minimal --output ./rules.json")
+	fmt.Fprintln(w, "  marume testdata write --rules rules/rules-2026.sqlite --dir ./.local/marume-sample")
 }
 
 func unknownPresetError(kind, preset string, names []string) error {
-	return fmt.Errorf("%w: %s preset %q は未定義です (利用可能: %s)", errInvalidInput, kind, preset, joinPresetNamesFromSlice(names))
+	return fmt.Errorf("%w: %s preset %q は未定義です (利用可能: %s)", errInvalidInput, kind, preset, joinNames(names))
 }
 
-func joinPresetNames[K comparable, V any](values map[K]V) string {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		names = append(names, fmt.Sprint(name))
-	}
-	slices.Sort(names)
-	return joinPresetNamesFromSlice(names)
+func containsName(values []string, target string) bool {
+	return slices.Contains(values, target)
 }
 
-func presetNames[K comparable, V any](values map[K]V) []string {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		names = append(names, fmt.Sprint(name))
-	}
-	slices.Sort(names)
-	return names
-}
-
-func joinPresetNamesFromSlice(names []string) string {
-	return fmt.Sprintf("[%s]", strings.Join(names, ", "))
+func joinNames(names []string) string {
+	sorted := append([]string(nil), names...)
+	slices.Sort(sorted)
+	return fmt.Sprintf("[%s]", strings.Join(sorted, ", "))
 }

@@ -51,7 +51,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "schema":
 		return runSchema(args[1:], stdout, stderr)
 	case "testdata":
-		return runTestdata(args[1:], stdout, stderr)
+		return runTestdata(ctx, args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
 	case "version":

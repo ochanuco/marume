@@ -66,10 +66,10 @@ cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 
 ## 使い方
 
-まず、README 用のサンプル一式を CLI から生成します。
+採用済みの rules snapshot から、README 用のサンプル一式を CLI で生成します。
 
 ```bash
-./marume testdata write --dir .local/marume-sample
+./marume testdata write --rules rules/rules-2026.sqlite --dir .local/marume-sample
 ```
 
 生成されるファイル:
@@ -92,9 +92,9 @@ cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 必要なら個別に生成することもできます。
 
 ```bash
-./marume testdata case --preset ok
-./marume testdata batch --preset basic
-./marume testdata rules --preset minimal
+./marume testdata case --rules rules/rules-2026.sqlite --preset ok
+./marume testdata batch --rules rules/rules-2026.sqlite --preset basic
+./marume testdata rules --rules rules/rules-2026.sqlite --preset minimal
 ```
 
 SQLite 対応後は、`--rules rules/rules-2026.sqlite` のように `rules/` 配下の成果物を渡す想定です。

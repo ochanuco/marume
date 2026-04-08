@@ -14,12 +14,13 @@ import (
 )
 
 func TestTestdataCaseは症例サンプルJSONを返す(t *testing.T) {
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
 	err := cli.Run(
 		context.Background(),
-		[]string{"testdata", "case", "--preset", "ok"},
+		[]string{"testdata", "case", "--preset", "ok", "--rules", rulesPath},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
@@ -32,8 +33,8 @@ func TestTestdataCaseは症例サンプルJSONを返す(t *testing.T) {
 	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
 		t.Fatalf("testdata case のJSON出力を読み取れませんでした: %v", decodeErr)
 	}
-	if result["case_id"] != "123" {
-		t.Fatalf("case_id は 123 を期待しましたが、実際は %v でした", result["case_id"])
+	if result["case_id"] != "sample-ok" {
+		t.Fatalf("case_id は sample-ok を期待しましたが、実際は %v でした", result["case_id"])
 	}
 	if result["main_diagnosis"] != "I219" {
 		t.Fatalf("main_diagnosis は I219 を期待しましたが、実際は %v でした", result["main_diagnosis"])
@@ -41,12 +42,13 @@ func TestTestdataCaseは症例サンプルJSONを返す(t *testing.T) {
 }
 
 func TestTestdataBatchはJSONLを返す(t *testing.T) {
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
 	err := cli.Run(
 		context.Background(),
-		[]string{"testdata", "batch", "--preset", "basic"},
+		[]string{"testdata", "batch", "--preset", "basic", "--rules", rulesPath},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
@@ -64,21 +66,22 @@ func TestTestdataBatchはJSONLを返す(t *testing.T) {
 	if decodeErr := json.Unmarshal([]byte(lines[0]), &first); decodeErr != nil {
 		t.Fatalf("1 行目のJSONを読み取れませんでした: %v", decodeErr)
 	}
-	if first["case_id"] != "123" {
-		t.Fatalf("1 行目の case_id は 123 を期待しましたが、実際は %v でした", first["case_id"])
+	if first["main_diagnosis"] != "I219" {
+		t.Fatalf("1 行目の main_diagnosis は I219 を期待しましたが、実際は %v でした", first["main_diagnosis"])
 	}
 }
 
 func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputDir := filepath.Join(tmpDir, "sample")
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
 	err := cli.Run(
 		context.Background(),
-		[]string{"testdata", "write", "--dir", outputDir},
+		[]string{"testdata", "write", "--dir", outputDir, "--rules", rulesPath},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
@@ -126,8 +129,8 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 	if decodeErr := json.Unmarshal(caseData, &caseContent); decodeErr != nil {
 		t.Fatalf("case-ok.json のJSONパースに失敗しました: %v", decodeErr)
 	}
-	if caseContent["case_id"] != "123" {
-		t.Fatalf("case-ok.json の case_id は 123 を期待しましたが、実際は %v でした", caseContent["case_id"])
+	if caseContent["case_id"] != "sample-ok" {
+		t.Fatalf("case-ok.json の case_id は sample-ok を期待しましたが、実際は %v でした", caseContent["case_id"])
 	}
 
 	rulesData, readErr := os.ReadFile(filepath.Join(outputDir, "rules-minimal.json"))
@@ -140,6 +143,11 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 	}
 	if rulesContent["rule_version"] != "2026.0.0-poc" {
 		t.Fatalf("rules-minimal.json の rule_version は 2026.0.0-poc を期待しましたが、実際は %v でした", rulesContent["rule_version"])
+	}
+	expectedRuleCount := 2
+	rulesList, ok := rulesContent["rules"].([]any)
+	if !ok || len(rulesList) != expectedRuleCount {
+		t.Fatalf("rules-minimal.json の rules は %d 件を期待しましたが、実際は %v でした", expectedRuleCount, rulesContent["rules"])
 	}
 
 	batchFile, openErr := os.Open(filepath.Join(outputDir, "cases-basic.jsonl"))
@@ -169,12 +177,13 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 }
 
 func TestTestdataUnknownPresetは入力エラーを返す(t *testing.T) {
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
 	err := cli.Run(
 		context.Background(),
-		[]string{"testdata", "case", "--preset", "missing"},
+		[]string{"testdata", "case", "--preset", "missing", "--rules", rulesPath},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
