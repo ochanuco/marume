@@ -26,6 +26,11 @@ var (
 
 const testdataMinimalRuleCount = 2
 
+type synthesizedTestdata struct {
+	ruleSet       domain.RuleSet
+	casesByRuleID map[string]domain.CaseInput
+}
+
 func runTestdata(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printTestdataUsage(stderr)
@@ -85,11 +90,11 @@ func runTestdataCase(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
+	synthesized, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
-	value, err := buildCasePreset(*preset, sampleRuleSet)
+	value, err := buildCasePreset(*preset, synthesized)
 	if err != nil {
 		return err
 	}
@@ -131,11 +136,11 @@ func runTestdataBatch(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
+	synthesized, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
-	value, err := buildBatchPreset(*preset, sampleRuleSet)
+	value, err := buildBatchPreset(*preset, synthesized)
 	if err != nil {
 		return err
 	}
@@ -177,11 +182,11 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	value, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
+	synthesized, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
-	return writeJSONToPath(*outputPath, stdout, value)
+	return writeJSONToPath(*outputPath, stdout, synthesized.ruleSet)
 }
 
 func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -233,15 +238,15 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
+	synthesized, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
-	caseValue, err := buildCasePreset(*casePreset, sampleRuleSet)
+	caseValue, err := buildCasePreset(*casePreset, synthesized)
 	if err != nil {
 		return err
 	}
-	batchValue, err := buildBatchPreset(*batchPreset, sampleRuleSet)
+	batchValue, err := buildBatchPreset(*batchPreset, synthesized)
 	if err != nil {
 		return err
 	}
@@ -260,7 +265,7 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err := writeJSONLFile(batchPath, batchValue); err != nil {
 		return err
 	}
-	if err := writePrettyJSONFile(rulesOutputPath, sampleRuleSet); err != nil {
+	if err := writePrettyJSONFile(rulesOutputPath, synthesized.ruleSet); err != nil {
 		return err
 	}
 
@@ -289,53 +294,66 @@ func loadTestdataSourceRuleSet(ctx context.Context, flags *flag.FlagSet, request
 	return ruleSet, nil
 }
 
-func buildTestdataRuleSet(source domain.RuleSet, maxRules int, verbose bool, stderr io.Writer) (domain.RuleSet, error) {
+func buildTestdataRuleSet(source domain.RuleSet, maxRules int, verbose bool, stderr io.Writer) (synthesizedTestdata, error) {
 	selected := make([]domain.Rule, 0, maxRules)
+	casesByRuleID := make(map[string]domain.CaseInput, maxRules)
 	for _, rule := range sortRulesForTestdata(source.Rules) {
 		if len(selected) == maxRules {
 			break
 		}
-		if _, err := synthesizeCaseForRule(source.FiscalYear, rule, fmt.Sprintf("sample-%s", rule.ID)); err != nil {
+		synthesizedCase, err := synthesizeCaseForRule(source.FiscalYear, rule, fmt.Sprintf("sample-%s", rule.ID))
+		if err != nil {
 			if verbose && stderr != nil {
 				fmt.Fprintf(stderr, "skipping rule %s: %v\n", rule.ID, err)
 			}
 			continue
 		}
 		selected = append(selected, rule)
+		casesByRuleID[rule.ID] = synthesizedCase
 	}
 	if len(selected) == 0 {
-		return domain.RuleSet{}, fmt.Errorf("%w: サンプル生成に使えるルールが見つかりません", errInvalidInput)
+		return synthesizedTestdata{}, fmt.Errorf("%w: サンプル生成に使えるルールが見つかりません", errInvalidInput)
 	}
-	return domain.RuleSet{
-		FiscalYear:  source.FiscalYear,
-		RuleVersion: source.RuleVersion,
-		BuildID:     source.BuildID,
-		BuiltAt:     source.BuiltAt,
-		Rules:       selected,
+	return synthesizedTestdata{
+		ruleSet: domain.RuleSet{
+			FiscalYear:  source.FiscalYear,
+			RuleVersion: source.RuleVersion,
+			BuildID:     source.BuildID,
+			BuiltAt:     source.BuiltAt,
+			Rules:       selected,
+		},
+		casesByRuleID: casesByRuleID,
 	}, nil
 }
 
-func buildCasePreset(preset string, ruleSet domain.RuleSet) (domain.CaseInput, error) {
+func buildCasePreset(preset string, synthesized synthesizedTestdata) (domain.CaseInput, error) {
 	switch preset {
 	case "ok":
-		if len(ruleSet.Rules) == 0 {
+		if len(synthesized.ruleSet.Rules) == 0 {
 			return domain.CaseInput{}, fmt.Errorf("%w: case サンプル生成に使えるルールがありません", errInvalidInput)
 		}
-		return synthesizeCaseForRule(ruleSet.FiscalYear, ruleSet.Rules[0], "sample-ok")
+		rule := synthesized.ruleSet.Rules[0]
+		value, ok := synthesized.casesByRuleID[rule.ID]
+		if !ok {
+			return domain.CaseInput{}, fmt.Errorf("%w: rule %s のサンプル症例が見つかりません", errRuleRuntime, rule.ID)
+		}
+		value.CaseID = "sample-ok"
+		return value, nil
 	default:
 		return domain.CaseInput{}, unknownPresetError("case", preset, testdataCasePresets)
 	}
 }
 
-func buildBatchPreset(preset string, ruleSet domain.RuleSet) ([]domain.CaseInput, error) {
+func buildBatchPreset(preset string, synthesized synthesizedTestdata) ([]domain.CaseInput, error) {
 	switch preset {
 	case "basic":
-		cases := make([]domain.CaseInput, 0, len(ruleSet.Rules))
-		for idx, rule := range ruleSet.Rules {
-			item, err := synthesizeCaseForRule(ruleSet.FiscalYear, rule, fmt.Sprintf("sample-%02d", idx+1))
-			if err != nil {
-				return nil, err
+		cases := make([]domain.CaseInput, 0, len(synthesized.ruleSet.Rules))
+		for idx, rule := range synthesized.ruleSet.Rules {
+			item, ok := synthesized.casesByRuleID[rule.ID]
+			if !ok {
+				return nil, fmt.Errorf("%w: rule %s のサンプル症例が見つかりません", errRuleRuntime, rule.ID)
 			}
+			item.CaseID = fmt.Sprintf("sample-%02d", idx+1)
 			cases = append(cases, item)
 		}
 		return cases, nil
