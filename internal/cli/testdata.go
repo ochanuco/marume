@@ -67,6 +67,7 @@ func runTestdataCase(ctx context.Context, args []string, stdout, stderr io.Write
 	preset := flags.String("preset", "ok", "生成する症例プリセット名")
 	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
+	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -84,7 +85,7 @@ func runTestdataCase(ctx context.Context, args []string, stdout, stderr io.Write
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
@@ -112,6 +113,7 @@ func runTestdataBatch(ctx context.Context, args []string, stdout, stderr io.Writ
 	preset := flags.String("preset", "basic", "生成するバッチプリセット名")
 	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
+	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -129,7 +131,7 @@ func runTestdataBatch(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
@@ -157,6 +159,7 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	preset := flags.String("preset", "minimal", "生成するルールセットプリセット名")
 	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
+	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -174,7 +177,7 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	value, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	value, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
@@ -203,6 +206,7 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 	casePreset := flags.String("case-preset", "ok", "case 用プリセット名")
 	batchPreset := flags.String("batch-preset", "basic", "batch 用プリセット名")
 	rulesPreset := flags.String("rules-preset", "minimal", "rules 用プリセット名")
+	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -229,7 +233,7 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount)
+	sampleRuleSet, err := buildTestdataRuleSet(sourceRuleSet, testdataMinimalRuleCount, *verbose, stderr)
 	if err != nil {
 		return err
 	}
@@ -285,13 +289,16 @@ func loadTestdataSourceRuleSet(ctx context.Context, flags *flag.FlagSet, request
 	return ruleSet, nil
 }
 
-func buildTestdataRuleSet(source domain.RuleSet, maxRules int) (domain.RuleSet, error) {
+func buildTestdataRuleSet(source domain.RuleSet, maxRules int, verbose bool, stderr io.Writer) (domain.RuleSet, error) {
 	selected := make([]domain.Rule, 0, maxRules)
 	for _, rule := range sortRulesForTestdata(source.Rules) {
 		if len(selected) == maxRules {
 			break
 		}
 		if _, err := synthesizeCaseForRule(source.FiscalYear, rule, fmt.Sprintf("sample-%s", rule.ID)); err != nil {
+			if verbose && stderr != nil {
+				fmt.Fprintf(stderr, "skipping rule %s: %v\n", rule.ID, err)
+			}
 			continue
 		}
 		selected = append(selected, rule)
@@ -396,6 +403,8 @@ func synthesizeCaseForRule(fiscalYear int, rule domain.Rule, caseID string) (dom
 	if input.MainDiagnosis == "" {
 		return domain.CaseInput{}, fmt.Errorf("%w: rule %s に main_diagnosis 条件がありません", errInvalidInput, rule.ID)
 	}
+	// Keep the synthesized sample aligned with the rule's main diagnosis even when
+	// the source rule does not have an explicit diagnoses condition.
 	if len(input.Diagnoses) == 0 {
 		input.Diagnoses = []string{input.MainDiagnosis}
 	}
@@ -419,6 +428,7 @@ func chooseAge(minAge, maxAge *int, ruleID string) (int, error) {
 	case maxAge != nil:
 		return *maxAge, nil
 	default:
+		// Defensive: callers only invoke chooseAge when at least one bound is non-nil.
 		return 0, fmt.Errorf("%w: rule %s から age を選べません", errInvalidInput, ruleID)
 	}
 }
@@ -479,7 +489,7 @@ func writeJSONToPath(path string, stdout io.Writer, value any) error {
 func writePrettyJSONFile(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return fmt.Errorf("%w: JSONの生成に失敗しました: %v", errRuleRuntime, err)
+		return fmt.Errorf("%w: JSONの生成に失敗しました: %v", errInvalidInput, err)
 	}
 	data = append(data, '\n')
 	if err := os.WriteFile(path, data, 0o644); err != nil {

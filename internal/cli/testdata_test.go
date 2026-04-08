@@ -164,8 +164,13 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 		if decodeErr := json.Unmarshal(scanner.Bytes(), &row); decodeErr != nil {
 			t.Fatalf("cases-basic.jsonl の %d 行目のJSONパースに失敗しました: %v", lineCount, decodeErr)
 		}
-		if row["case_id"] == "" {
-			t.Fatalf("cases-basic.jsonl の %d 行目は case_id を期待しましたが、実際は %v でした", lineCount, row["case_id"])
+		rawCaseID, ok := row["case_id"]
+		if !ok || rawCaseID == nil {
+			t.Fatalf("cases-basic.jsonl の %d 行目は case_id キーを期待しましたが、実際は %v でした", lineCount, row)
+		}
+		caseID, ok := rawCaseID.(string)
+		if !ok || caseID == "" {
+			t.Fatalf("cases-basic.jsonl の %d 行目は空でない case_id を期待しましたが、実際は %v でした", lineCount, rawCaseID)
 		}
 	}
 	if scanErr := scanner.Err(); scanErr != nil {
