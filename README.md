@@ -97,7 +97,7 @@ cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 ./marume testdata rules --rules rules/rules-2026.sqlite --preset minimal
 ```
 
-SQLite 対応後は、`--rules rules/rules-2026.sqlite` のように `rules/` 配下の成果物を渡す想定です。
+`--rules rules/rules-2026.sqlite` のように `rules/` 配下の成果物を渡せます。JSON と SQLite の両形式に対応しています。
 
 `stdin` から読む場合は `--input -` を使います。
 `classify-batch` は `JSONL` を 1 行ずつ読み、結果も `JSONL` で返します。
