@@ -50,6 +50,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runExplain(ctx, args[1:], stdin, stdout, stderr)
 	case "schema":
 		return runSchema(args[1:], stdout, stderr)
+	case "testdata":
+		return runTestdata(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
 	case "version":
@@ -693,6 +695,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  classify-batch 複数症例を一括分類する")
 	fmt.Fprintln(w, "  explain    候補ルールと判定理由を表示する")
 	fmt.Fprintln(w, "  schema     入出力JSON Schemaを表示する")
+	fmt.Fprintln(w, "  testdata   サンプル入力とルールセットを生成する")
 	fmt.Fprintln(w, "  validate   入力JSONを検証する")
 	fmt.Fprintln(w, "  version    CLIとルールセットのバージョンを表示する")
 	fmt.Fprintln(w, "")
@@ -701,6 +704,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  marume classify-batch --input cases.jsonl --output results.jsonl")
 	fmt.Fprintln(w, "  marume explain --input case.json")
 	fmt.Fprintln(w, "  marume schema case-input")
+	fmt.Fprintln(w, "  marume testdata write --dir ./.local/marume-sample")
 	fmt.Fprintln(w, "  marume validate --input case.json")
 	fmt.Fprintln(w, "  marume version")
 	fmt.Fprintln(w, "")
