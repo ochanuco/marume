@@ -48,6 +48,8 @@ def build_sample_case_candidates(
 
     candidates: list[SampleCaseCandidate] = []
     for idx, row in enumerate(extracted_cases, start=1):
+        if not isinstance(row, dict):
+            raise TypeError(f"Row {idx} must be a dict/mapping, got {type(row).__name__}")
         dpc_code = _require_str(row, "dpc_code")
         raw_name = _require_str(row, "dpc_name")
         example_text = _require_str(row, "example_text")
