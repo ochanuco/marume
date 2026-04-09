@@ -48,8 +48,12 @@ def extract_coding_cases_from_pdf(
 
     reader = PdfReader(str(pdf_path))
     page_count = len(reader.pages)
-    page_start = max(1, start_page or 1)
-    page_end = min(page_count, end_page or page_count)
+    page_start = start_page if start_page is not None else 1
+    page_end = end_page if end_page is not None else page_count
+    if page_start < 1:
+        raise ValueError(f"start_page {start_page} must be at least 1")
+    if page_end < 1:
+        raise ValueError(f"end_page {end_page} must be at least 1")
     if page_start > page_count:
         raise ValueError(f"start_page {page_start} exceeds page count {page_count}")
     if page_end < page_start:
@@ -191,11 +195,24 @@ def _normalize_text(text: str) -> str:
 
 def _is_header_line(line: str) -> bool:
     compact = re.sub(r"\s+", "", line)
-    return compact.startswith(("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称", "事例", "対応"))
+    # Unambiguous header prefixes can use startswith
+    if compact.startswith(("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称")):
+        return True
+    # Generic tokens need exact matching to avoid false positives in sentence bodies
+    if compact in ("事例", "対応"):
+        return True
+    return False
 
 
 def _looks_like_narrative(line: str) -> bool:
-    return any(token in line for token in ("。", "場合", "入院", "術", "診断", "病名", "について"))
+    # Check for sentence-ending punctuation
+    if any(char in line for char in ("。", "．", "!", "?", "！", "？")):
+        return True
+    # Check for explanatory/parenthetical annotations
+    stripped = line.strip()
+    if any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "(")):
+        return True
+    return False
 
 
 def _join_lines(lines: list[str]) -> str:
