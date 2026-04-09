@@ -99,7 +99,11 @@ SELECT
 	built_at
 FROM rule_sets
 WHERE fiscal_year = ?
-ORDER BY rule_set_id DESC
+ORDER BY
+	COALESCE(source_published_at, '') DESC,
+	rule_version DESC,
+	COALESCE(built_at, '') DESC,
+	rule_set_id DESC
 LIMIT 1
 `
 
@@ -185,7 +189,12 @@ SELECT
 	build_id,
 	built_at
 FROM rule_sets
-ORDER BY fiscal_year DESC, rule_set_id
+ORDER BY
+	fiscal_year DESC,
+	COALESCE(source_published_at, '') DESC,
+	rule_version DESC,
+	COALESCE(built_at, '') DESC,
+	rule_set_id DESC
 LIMIT 1
 `
 
