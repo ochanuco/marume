@@ -204,8 +204,11 @@ def _parse_source_page(row: dict[str, object], row_index: int) -> int:
             raise TypeError(f"source_page must be non-negative at row {row_index}: {value!r}")
         return value
     if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return 0
         try:
-            result = int(value)
+            result = int(stripped)
             if result < 0:
                 raise TypeError(f"source_page must be non-negative at row {row_index}: {value!r}")
             return result
