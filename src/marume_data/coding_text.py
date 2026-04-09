@@ -56,6 +56,8 @@ def extract_coding_cases_from_pdf(
         raise ValueError(f"end_page {end_page} must be at least 1")
     if page_start > page_count:
         raise ValueError(f"start_page {page_start} exceeds page count {page_count}")
+    if page_end > page_count:
+        raise ValueError(f"end_page {page_end} exceeds page count {page_count}")
     if page_end < page_start:
         raise ValueError(f"end_page {page_end} is before start_page {page_start}")
 
@@ -200,7 +202,14 @@ def _is_header_line(line: str) -> bool:
 
 def _looks_like_narrative(line: str) -> bool:
     stripped = line.strip()
-    return any(char in line for char in ("。", "．", "!", "?", "！", "？")) or any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "("))
+    if any(char in line for char in ("。", "．", "!", "?", "！", "？")):
+        return True
+    if any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "(")):
+        return True
+    # Check for Japanese characters (hiragana, katakana, kanji) but exclude heading-like prefixes
+    if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', stripped):
+        return not any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "("))
+    return False
 
 
 def _join_lines(lines: list[str]) -> str:
