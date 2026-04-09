@@ -195,24 +195,12 @@ def _normalize_text(text: str) -> str:
 
 def _is_header_line(line: str) -> bool:
     compact = re.sub(r"\s+", "", line)
-    # Unambiguous header prefixes can use startswith
-    if compact.startswith(("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称")):
-        return True
-    # Generic tokens need exact matching to avoid false positives in sentence bodies
-    if compact in ("事例", "対応"):
-        return True
-    return False
+    return compact.startswith(("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称")) or compact in ("事例", "対応")
 
 
 def _looks_like_narrative(line: str) -> bool:
-    # Check for sentence-ending punctuation
-    if any(char in line for char in ("。", "．", "!", "?", "！", "？")):
-        return True
-    # Check for explanatory/parenthetical annotations
     stripped = line.strip()
-    if any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "(")):
-        return True
-    return False
+    return any(char in line for char in ("。", "．", "!", "?", "！", "？")) or any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "("))
 
 
 def _join_lines(lines: list[str]) -> str:
