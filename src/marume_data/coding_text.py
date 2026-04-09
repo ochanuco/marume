@@ -181,16 +181,8 @@ def _normalize_text(text: str) -> str:
 
 def _is_header_line(line: str) -> bool:
     compact = re.sub(r"\s+", "", line)
-    return (
-        compact.startswith("別添")
-        or compact.startswith("付録")
-        or compact.startswith("Ⅴ.付録")
-        or compact.startswith("DPC上6桁")
-        or compact.startswith("DPC上６桁")
-        or compact.startswith("DPC名称")
-        or compact.startswith("事例")
-        or compact.startswith("対応")
-        or compact.startswith("<<PAGE:")
+    return compact.startswith(
+        ("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称", "事例", "対応", "<<PAGE:")
     )
 
 

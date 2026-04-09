@@ -46,8 +46,8 @@ def test_mainはダウンロードした一時pdfを削除する(
         ),
     )
     monkeypatch.setattr(script_module, "_download_pdf", lambda _: downloaded_pdf)
-    monkeypatch.setattr(script_module, "extract_coding_cases_from_pdf", lambda *args, **kwargs: [])
-    monkeypatch.setattr(script_module, "write_coding_cases_json", lambda *args, **kwargs: None)
+    monkeypatch.setattr(script_module, "extract_coding_cases_from_pdf", lambda *_a, **_kw: [])
+    monkeypatch.setattr(script_module, "write_coding_cases_json", lambda *_a, **_kw: None)
 
     assert script_module.main() == 0
     assert not downloaded_pdf.exists()
