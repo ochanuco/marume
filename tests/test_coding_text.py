@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from marume_data.coding_text import _parse_coding_cases_from_lines, parse_coding_cases_from_text
 
 
@@ -77,3 +81,28 @@ def test_事例先頭がガイダンスでも分離できる() -> None:
     assert len(cases) == 1
     assert cases[0].example_text == ""
     assert cases[0].guidance_text == "医療資源病名は頭頂葉神経膠腫（C713）を選択する。"
+
+
+def test_start_page指定時は見出し前提にせず抽出を始める(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakePage:
+        def __init__(self, text: str) -> None:
+            self._text = text
+
+        def extract_text(self) -> str:
+            return self._text
+
+    class FakeReader:
+        def __init__(self, _: str) -> None:
+            self.pages = [
+                FakePage("前置き"),
+                FakePage("010010 脳腫瘍\n頭頂葉神経膠腫の摘出術を行った場合。\n医療資源病名は頭頂葉神経膠腫（C713）を選択する。"),
+            ]
+
+    monkeypatch.setattr("marume_data.coding_text.PdfReader", FakeReader)
+
+    from marume_data.coding_text import extract_coding_cases_from_pdf
+
+    cases = extract_coding_cases_from_pdf(Path("dummy.pdf"), start_page=2)
+
+    assert len(cases) == 1
+    assert cases[0].dpc_code == "010010"

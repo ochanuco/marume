@@ -47,7 +47,7 @@ def extract_coding_cases_from_pdf(
     page_start = max(1, start_page or 1)
     page_end = min(page_count, end_page or page_count)
 
-    in_appendix = False
+    in_appendix = start_page is not None
     combined_lines: list[str] = []
     for page_no in range(page_start, page_end + 1):
         page_text = reader.pages[page_no - 1].extract_text() or ""

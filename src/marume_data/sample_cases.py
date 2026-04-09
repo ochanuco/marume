@@ -7,9 +7,11 @@ from pathlib import Path
 
 
 ICD_PATTERN = re.compile(r"（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
-PROCEDURE_PATTERN = re.compile(r"\b([A-Z][0-9]{3,4})\b")
+PROCEDURE_PATTERN = re.compile(r"(?<![（(])([A-Z][0-9]{3,4})(?![）)])")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
-RESOURCE_DIAGNOSIS_PATTERN = re.compile(r"医療資源病名[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
+RESOURCE_DIAGNOSIS_PATTERN = re.compile(
+    r"(?:医療資源病名|医療資源を最も投入した傷病名)[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）"
+)
 CURRENT_CLASSIFICATION_PATTERN = re.compile(r"本分類[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?が該当")
 GUIDANCE_SELECTION_PATTERN = re.compile(r"([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?(?:を選択する|を選択|が該当)")
 

@@ -25,6 +25,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    downloaded_temp_pdf = args.input_pdf is None
+    pdf_path: Path | None = None
 
     try:
         pdf_path = args.input_pdf or _download_pdf(args.url)
@@ -37,6 +39,9 @@ def main() -> int:
     except Exception as exc:
         print(f"coding case extraction failed: {exc}", file=sys.stderr)
         return 1
+    finally:
+        if downloaded_temp_pdf and pdf_path is not None and pdf_path.exists():
+            pdf_path.unlink()
 
     print(f"{args.output} ({len(cases)} cases)")
     return 0
