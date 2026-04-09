@@ -14,3 +14,15 @@ run = "mkdir -p .local/go-build .local/go-mod && GOCACHE=$PWD/.local/go-build GO
 description = "Generate sample case, batch, and minimal rules files"
 depends = ["build"]
 run = "./marume testdata write --dir .local/marume-sample"
+
+[tasks.coding-cases-extract]
+description = "厚労省公開のコーディングテキスト PDF から DPC コーディング事例を抽出"
+run = "uv run python scripts/extract_dpc_coding_cases.py --url https://www.mhlw.go.jp/content/12404000/001394024.pdf --output .local/dpc-coding-cases-v6.json --start-page 36"
+
+[tasks.coding-cases-build]
+description = "抽出済み DPC コーディング事例から marume 向け症例候補 JSON を生成"
+run = "uv run python scripts/build_dpc_sample_cases.py --input .local/dpc-coding-cases-v6.json --output .local/dpc-sample-case-candidates-v6.json --fiscal-year 2026"
+
+[tasks.coding-cases]
+description = "DPC コーディング事例の抽出から症例候補 JSON 生成までをまとめて実行"
+depends = ["coding-cases-extract", "coding-cases-build"]
