@@ -110,13 +110,14 @@ def write_sample_case_candidates_json(output_path: Path, candidates: list[Sample
 
 
 def _select_main_diagnosis(combined_text: str, guidance_text: str, icd_codes: list[str]) -> str:
+    # Prefer the last matched guidance because later sentences in the PDF tend to refine earlier ones.
     resource_codes = RESOURCE_DIAGNOSIS_PATTERN.findall(guidance_text)
     if resource_codes:
         return resource_codes[-1]
 
     current_classification_codes = CURRENT_CLASSIFICATION_PATTERN.findall(combined_text)
     if current_classification_codes:
-        return current_classification_codes[0]
+        return current_classification_codes[-1]
 
     preferred = GUIDANCE_SELECTION_PATTERN.findall(combined_text)
     if preferred:
@@ -176,5 +177,5 @@ def _dedupe(values: Iterable[str]) -> list[str]:
 def _require_str(row: dict[str, object], key: str) -> str:
     value = row.get(key)
     if not isinstance(value, str):
-        raise ValueError(f"{key} must be a string")
+        raise TypeError(f"{key} must be a string")
     return value

@@ -133,7 +133,7 @@ def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase |
         name_lines.append(remaining[idx])
         idx += 1
 
-    narrative = remaining[idx:] or remaining[len(name_lines) :]
+    narrative = remaining[idx:]
     if not name_lines and narrative:
         name_lines.append(narrative[0])
         narrative = narrative[1:]

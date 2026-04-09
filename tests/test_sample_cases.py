@@ -173,5 +173,5 @@ def test_必須文字列が欠けていると失敗する() -> None:
         }
     ]
 
-    with pytest.raises(ValueError, match="guidance_text must be a string"):
+    with pytest.raises(TypeError, match="guidance_text must be a string"):
         build_sample_case_candidates(extracted, fiscal_year=2026)

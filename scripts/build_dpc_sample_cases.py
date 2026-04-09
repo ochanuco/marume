@@ -21,7 +21,7 @@ def main() -> int:
     try:
         extracted = json.loads(args.input.read_text(encoding="utf-8"))
         if not isinstance(extracted, list):
-            raise ValueError("input JSON must be an array")
+            raise TypeError("input JSON must be an array")
         cases = build_sample_case_candidates(extracted, fiscal_year=args.fiscal_year)
         write_sample_case_candidates_json(args.output, cases)
     except Exception as exc:
