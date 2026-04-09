@@ -9,6 +9,9 @@ from pathlib import Path
 ICD_PATTERN = re.compile(r"（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
 PROCEDURE_PATTERN = re.compile(r"\b([A-Z][0-9]{3,4})\b")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
+RESOURCE_DIAGNOSIS_PATTERN = re.compile(r"医療資源病名[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
+CURRENT_CLASSIFICATION_PATTERN = re.compile(r"本分類[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?が該当")
+GUIDANCE_SELECTION_PATTERN = re.compile(r"([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?(?:を選択する|を選択|が該当)")
 
 
 @dataclass(slots=True)
@@ -46,12 +49,13 @@ def build_sample_case_candidates(
 
         dpc_name, leaked_example = split_dpc_name_and_example(raw_name)
         combined_example = _join_texts(leaked_example, example_text)
-        icd_codes = _dedupe(ICD_PATTERN.findall(_join_texts(combined_example, guidance_text)))
+        combined_text = _join_texts(combined_example, guidance_text)
+        icd_codes = _dedupe(ICD_PATTERN.findall(combined_text))
         procedures = _extract_procedures(combined_example, guidance_text)
 
-        main_diagnosis = _select_main_diagnosis(icd_codes)
+        main_diagnosis = _select_main_diagnosis(combined_text, guidance_text, icd_codes)
         diagnoses = [main_diagnosis] if main_diagnosis else []
-        comorbidities = icd_codes[1:] if len(icd_codes) > 1 else []
+        comorbidities = [code for code in icd_codes if code != main_diagnosis]
         notes = _build_notes(raw_name, leaked_example, icd_codes, procedures)
 
         candidates.append(
@@ -98,8 +102,24 @@ def write_sample_case_candidates_json(output_path: Path, candidates: list[Sample
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _select_main_diagnosis(icd_codes: list[str]) -> str:
-    return icd_codes[0] if icd_codes else ""
+def _select_main_diagnosis(combined_text: str, guidance_text: str, icd_codes: list[str]) -> str:
+    resource_codes = RESOURCE_DIAGNOSIS_PATTERN.findall(guidance_text)
+    if resource_codes:
+        return resource_codes[-1]
+
+    current_classification_codes = CURRENT_CLASSIFICATION_PATTERN.findall(combined_text)
+    if current_classification_codes:
+        return current_classification_codes[0]
+
+    preferred = GUIDANCE_SELECTION_PATTERN.findall(combined_text)
+    if preferred:
+        return preferred[-1]
+
+    guidance_codes = ICD_PATTERN.findall(guidance_text)
+    if guidance_codes:
+        return guidance_codes[-1]
+
+    return icd_codes[-1] if icd_codes else ""
 
 
 def _extract_procedures(*texts: str) -> list[str]:

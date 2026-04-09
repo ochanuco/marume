@@ -40,3 +40,41 @@ def test_extracted_casesからsample_case候補を組み立てられる() -> Non
     assert cases[0].procedures == []
     assert "処置コード未抽出" in cases[0].notes
     assert cases[1].main_diagnosis == "I601"
+
+
+def test_main_diagnosisは不適切コードではなく選択されるコードを優先する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010010",
+            "dpc_name": "脳腫瘍",
+            "example_text": "神経膠腫（C719）は、部位が不明確であり不適切である。部位を明確にし、頭頂葉神経膠腫（C713）のように表す。",
+            "guidance_text": "",
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].main_diagnosis == "C713"
+    assert cases[0].comorbidities == ["C719"]
+
+
+def test_main_diagnosisは本分類が該当するコードを優先する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010020",
+            "dpc_name": "くも膜下出血、破裂脳動脈瘤",
+            "example_text": "くも膜下出血について。",
+            "guidance_text": "本分類は、非外傷性のくも膜下出血（I60$）が該当する。外傷による場合は、外傷性くも膜下出血（S066$）を選択し、他分類となる。",
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].main_diagnosis == "I60$"
+    assert cases[0].comorbidities == ["S066$"]

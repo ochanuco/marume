@@ -21,6 +21,7 @@ GUIDANCE_MARKERS = (
     "として扱う",
     "に分類",
 )
+PAGE_MARKER_PATTERN = re.compile(r"^<<PAGE:(\d+)>>$")
 
 
 @dataclass(slots=True)
@@ -47,40 +48,55 @@ def extract_coding_cases_from_pdf(
     page_end = min(page_count, end_page or page_count)
 
     in_appendix = False
-    extracted: list[CodingTextCase] = []
+    combined_lines: list[str] = []
     for page_no in range(page_start, page_end + 1):
         page_text = reader.pages[page_no - 1].extract_text() or ""
         if not in_appendix and _contains_appendix_heading(page_text):
             in_appendix = True
         if not in_appendix:
             continue
-        extracted.extend(parse_coding_cases_from_text(page_text, source_page=page_no))
-    return extracted
+        combined_lines.append(f"<<PAGE:{page_no}>>")
+        combined_lines.extend(page_text.splitlines())
+    return _parse_coding_cases_from_lines(combined_lines, default_source_page=page_start)
 
 
 def parse_coding_cases_from_text(text: str, *, source_page: int) -> list[CodingTextCase]:
     """Parse coding case rows from one appendix page worth of extracted text."""
 
-    lines = _clean_lines(text.splitlines())
+    return _parse_coding_cases_from_lines(text.splitlines(), default_source_page=source_page)
+
+
+def _parse_coding_cases_from_lines(lines: list[str], *, default_source_page: int) -> list[CodingTextCase]:
+    cleaned = _clean_lines(lines)
     blocks: list[list[str]] = []
     current: list[str] = []
+    current_source_page = default_source_page
+    block_source_page = default_source_page
+    block_source_pages: list[int] = []
 
-    for line in lines:
+    for line in cleaned:
+        page_match = PAGE_MARKER_PATTERN.match(line)
+        if page_match is not None:
+            current_source_page = int(page_match.group(1))
+            continue
         if _contains_appendix_heading(line) or _is_header_line(line):
             continue
         if CASE_CODE_PATTERN.match(line):
             if current:
                 blocks.append(current)
+                block_source_pages.append(block_source_page)
             current = [line]
+            block_source_page = current_source_page
             continue
         if current:
             current.append(line)
 
     if current:
         blocks.append(current)
+        block_source_pages.append(block_source_page)
 
     parsed: list[CodingTextCase] = []
-    for block in blocks:
+    for block, source_page in zip(blocks, block_source_pages, strict=False):
         case = _parse_case_block(block, source_page=source_page)
         if case is not None:
             parsed.append(case)
@@ -176,6 +192,7 @@ def _is_header_line(line: str) -> bool:
         or compact.startswith("DPC名称")
         or compact.startswith("事例")
         or compact.startswith("対応")
+        or compact.startswith("<<PAGE:")
     )
 
 
