@@ -57,10 +57,11 @@ def build_sample_case_candidates(
         dpc_name, leaked_example = split_dpc_name_and_example(raw_name)
         combined_example = _join_texts(leaked_example, example_text)
         combined_text = _join_texts(combined_example, guidance_text)
-        icd_codes = _dedupe(ICD_PATTERN.findall(combined_text))
+        raw_icd_matches = ICD_PATTERN.findall(combined_text)
         procedures = _extract_procedures(combined_example)
 
-        main_diagnosis = _select_main_diagnosis(combined_text, guidance_text, icd_codes)
+        main_diagnosis = _select_main_diagnosis(combined_text, guidance_text, raw_icd_matches)
+        icd_codes = _dedupe(raw_icd_matches)
         diagnoses = [main_diagnosis] if main_diagnosis else []
         comorbidities = [code for code in icd_codes if code != main_diagnosis]
         notes = _build_notes(raw_name, leaked_example, icd_codes, procedures)
