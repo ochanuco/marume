@@ -206,9 +206,9 @@ def _looks_like_narrative(line: str) -> bool:
         return True
     if any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "(")):
         return True
-    # Check for Japanese characters (hiragana, katakana, kanji) but exclude heading-like prefixes
-    if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', stripped):
-        return not any(stripped.startswith(prefix) for prefix in ("説明", "備考", "（", "("))
+    # Check for hiragana/katakana (actual narrative indicators), not just kanji
+    if re.search(r'[\u3040-\u309F\u30A0-\u30FF]', stripped):
+        return True
     return False
 
 

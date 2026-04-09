@@ -129,7 +129,7 @@ uv run python scripts/build_dpc_sample_cases.py \
 ## テスト
 
 ```bash
-uv run pytest tests/test_coding_text.py tests/test_sample_cases.py tests/test_transform.py
+uv run pytest tests/test_coding_text.py tests/test_sample_cases.py tests/test_transform.py tests/test_extract_dpc_coding_cases_script.py
 ```
 
 ## 今後の改善候補
