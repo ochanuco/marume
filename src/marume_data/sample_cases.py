@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -161,7 +162,7 @@ def _normalize_space(text: str) -> str:
     return re.sub(r"[ \t\u3000]+", " ", text).strip()
 
 
-def _dedupe(values: list[str] | tuple[str, ...] | object) -> list[str]:
+def _dedupe(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
     for value in values:

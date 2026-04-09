@@ -96,7 +96,7 @@ def _parse_coding_cases_from_lines(lines: list[str], *, default_source_page: int
         block_source_pages.append(block_source_page)
 
     parsed: list[CodingTextCase] = []
-    for block, source_page in zip(blocks, block_source_pages, strict=False):
+    for block, source_page in zip(blocks, block_source_pages, strict=True):
         case = _parse_case_block(block, source_page=source_page)
         if case is not None:
             parsed.append(case)

@@ -27,6 +27,7 @@ def main() -> int:
     args = parse_args()
     downloaded_temp_pdf = args.input_pdf is None
     pdf_path: Path | None = None
+    cases: list[object] = []
 
     try:
         pdf_path = args.input_pdf or _download_pdf(args.url)

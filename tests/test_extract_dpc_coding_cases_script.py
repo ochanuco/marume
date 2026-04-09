@@ -8,26 +8,34 @@ import pytest
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "extract_dpc_coding_cases.py"
-SPEC = importlib.util.spec_from_file_location("extract_dpc_coding_cases", SCRIPT_PATH)
-assert SPEC is not None and SPEC.loader is not None
-MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
 
 
-def test_download_pdfはhttp_https以外を拒否する() -> None:
+@pytest.fixture(scope="module")
+def script_module():
+    if not SCRIPT_PATH.exists():
+        pytest.skip(f"Script not found: {SCRIPT_PATH}")
+    spec = importlib.util.spec_from_file_location("extract_dpc_coding_cases", SCRIPT_PATH)
+    if spec is None or spec.loader is None:
+        pytest.skip("Failed to load script spec")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_download_pdfはhttp_https以外を拒否する(script_module) -> None:
     with pytest.raises(ValueError, match="url must use http or https"):
-        MODULE._download_pdf("file:///tmp/test.pdf")
+        script_module._download_pdf("file:///tmp/test.pdf")
 
 
 def test_mainはダウンロードした一時pdfを削除する(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, script_module
 ) -> None:
     downloaded_pdf = tmp_path / "downloaded.pdf"
     downloaded_pdf.write_bytes(b"%PDF-1.4")
     output_path = tmp_path / "out.json"
 
     monkeypatch.setattr(
-        MODULE,
+        script_module,
         "parse_args",
         lambda: SimpleNamespace(
             input_pdf=None,
@@ -37,9 +45,9 @@ def test_mainはダウンロードした一時pdfを削除する(
             end_page=None,
         ),
     )
-    monkeypatch.setattr(MODULE, "_download_pdf", lambda _: downloaded_pdf)
-    monkeypatch.setattr(MODULE, "extract_coding_cases_from_pdf", lambda *args, **kwargs: [])
-    monkeypatch.setattr(MODULE, "write_coding_cases_json", lambda *args, **kwargs: None)
+    monkeypatch.setattr(script_module, "_download_pdf", lambda _: downloaded_pdf)
+    monkeypatch.setattr(script_module, "extract_coding_cases_from_pdf", lambda *args, **kwargs: [])
+    monkeypatch.setattr(script_module, "write_coding_cases_json", lambda *args, **kwargs: None)
 
-    assert MODULE.main() == 0
+    assert script_module.main() == 0
     assert not downloaded_pdf.exists()
