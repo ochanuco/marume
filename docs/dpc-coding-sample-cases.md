@@ -112,6 +112,7 @@ uv run python scripts/build_dpc_sample_cases.py \
 - `comorbidities`
 - `age`
 - `sex`
+- `source_page`
 - `example_text`
 - `guidance_text`
 - `notes`
