@@ -17,7 +17,7 @@ run = "./marume testdata write --dir .local/marume-sample"
 
 [tasks.coding-cases-extract]
 description = "厚労省公開のコーディングテキスト PDF から DPC コーディング事例を抽出"
-run = "uv run python scripts/extract_dpc_coding_cases.py --url ${DPC_CODING_TEXT_URL:-https://www.mhlw.go.jp/content/12404000/001394024.pdf} --output .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --start-page ${DPC_CODING_TEXT_START_PAGE:-36}"
+run = "uv run python scripts/extract_dpc_coding_cases.py --url ${DPC_CODING_TEXT_URL:-https://www.mhlw.go.jp/content/12404000/001394024.pdf} --output .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --start-page ${DPC_CODING_TEXT_START_PAGE:-35}"
 
 [tasks.coding-cases-build]
 description = "抽出済み DPC コーディング事例から marume 向け症例候補 JSON を生成"

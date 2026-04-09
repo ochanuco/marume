@@ -39,7 +39,7 @@ def main() -> int:
             end_page=args.end_page,
         )
         write_coding_cases_json(args.output, cases)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - top-level CLI converts unexpected errors into exit status 1
         print(f"coding case extraction failed: {exc}", file=sys.stderr)
         return 1
     finally:

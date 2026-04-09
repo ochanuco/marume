@@ -60,7 +60,7 @@ mise run coding-cases
 uv run python scripts/extract_dpc_coding_cases.py \
   --url https://www.mhlw.go.jp/content/12404000/001394024.pdf \
   --output .local/dpc-coding-cases-v6.json \
-  --start-page 36
+  --start-page 35
 ```
 
 ローカル PDF を使う場合:
@@ -69,7 +69,7 @@ uv run python scripts/extract_dpc_coding_cases.py \
 uv run python scripts/extract_dpc_coding_cases.py \
   --input-pdf /path/to/001394024.pdf \
   --output .local/dpc-coding-cases-v6.json \
-  --start-page 36
+  --start-page 35
 ```
 
 ### 2. `marume` 向け候補へ整形
