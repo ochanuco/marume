@@ -45,12 +45,14 @@ mise run coding-cases
 
 このコマンドで、`scripts/extract_dpc_coding_cases.py` と `scripts/build_dpc_sample_cases.py` が順に実行されます。
 
-必要なら次の環境変数で対象 PDF や出力バージョン、会計年度を上書きできます。
+必要なら次の環境変数で対象 PDF や出力バージョン、会計年度を上書きできます（mise タスク実行時のみ有効）。
 
 - `DPC_CODING_TEXT_URL`
 - `DPC_CODING_TEXT_VERSION`
 - `DPC_CODING_TEXT_START_PAGE`
 - `DPC_FISCAL_YEAR`
+
+**注意**: これらの環境変数は `mise run coding-cases` でタスクを実行する場合のみ有効です。`mise.toml` 内の `${DPC_CODING_TEXT_URL:-...}` などのシェルパラメータ展開により、環境変数値がスクリプトの CLI 引数に変換されます。Python スクリプトを `uv run` で直接実行する場合や、`scripts/extract_dpc_coding_cases.py` / `scripts/build_dpc_sample_cases.py` を直接実行する場合は、これらの環境変数は無視されるため、明示的にコマンドライン引数として渡す必要があります。
 
 ## 手動実行
 
