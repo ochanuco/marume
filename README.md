@@ -24,7 +24,7 @@
 
 ```bash
 mise install
-go build ./cmd/marume
+mise run build
 ```
 
 Python でデータ収集・整形を進める場合は、以下を使います。
@@ -69,7 +69,7 @@ cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 採用済みの rules snapshot から、README 用のサンプル一式を CLI で生成します。
 
 ```bash
-./marume testdata write --rules rules/rules-2026.sqlite --dir .local/marume-sample
+mise run sample
 ```
 
 生成されるファイル:
@@ -87,6 +87,14 @@ cp .local/sqlite/rules-2026.sqlite rules/rules-2026.sqlite
 ./marume schema case-input
 ./marume validate --input .local/marume-sample/case-ok.json
 ./marume version --rules .local/marume-sample/rules-minimal.json
+```
+
+反復開発では以下を使います。
+
+```bash
+mise run build
+mise run test
+mise run sample
 ```
 
 必要なら個別に生成することもできます。
