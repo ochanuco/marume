@@ -208,6 +208,6 @@ def _parse_source_page(row: dict[str, object], row_index: int) -> int:
             if result < 0:
                 raise TypeError(f"source_page must be non-negative at row {row_index}: {value!r}")
             return result
-        except ValueError:
-            raise TypeError(f"source_page must be an integer at row {row_index}: {value!r}")
+        except ValueError as err:
+            raise TypeError(f"source_page must be an integer at row {row_index}: {value!r}") from err
     raise TypeError(f"source_page must be an integer at row {row_index}: {value!r}")
