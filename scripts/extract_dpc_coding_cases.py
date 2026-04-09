@@ -43,8 +43,12 @@ def main() -> int:
 
 
 def _download_pdf(url: str) -> Path:
-    with urllib.request.urlopen(url) as response:
-        suffix = Path(urllib.parse.urlparse(url).path).suffix or ".pdf"
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("url must use http or https")
+
+    with urllib.request.urlopen(url, timeout=10) as response:
+        suffix = Path(parsed.path).suffix or ".pdf"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
             handle.write(response.read())
             return Path(handle.name)

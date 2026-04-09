@@ -64,3 +64,16 @@ def test_page跨ぎの事例を連結して抽出できる() -> None:
     assert cases[0].source_page == 36
     assert "椎骨 脳底動脈循環不全と判 明した場合。" in cases[0].example_text
     assert "G450" in cases[0].guidance_text
+
+
+def test_事例先頭がガイダンスでも分離できる() -> None:
+    text = """
+    010010 脳腫瘍
+    医療資源病名は頭頂葉神経膠腫（C713）を選択する。
+    """
+
+    cases = parse_coding_cases_from_text(text, source_page=35)
+
+    assert len(cases) == 1
+    assert cases[0].example_text == ""
+    assert cases[0].guidance_text == "医療資源病名は頭頂葉神経膠腫（C713）を選択する。"

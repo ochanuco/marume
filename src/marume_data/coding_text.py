@@ -158,8 +158,6 @@ def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase |
 
 def _find_guidance_start(lines: list[str]) -> int | None:
     for idx, line in enumerate(lines):
-        if idx == 0:
-            continue
         if any(marker in line for marker in GUIDANCE_MARKERS):
             return idx
     return None

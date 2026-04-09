@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from marume_data.sample_cases import build_sample_case_candidates, split_dpc_name_and_example
 
 
@@ -8,6 +10,13 @@ def test_dpc_nameから食い込んだ事例文を分離できる() -> None:
 
     assert name == "未破裂脳動脈瘤"
     assert leaked == "硬膜動静脈瘻のため、"
+
+
+def test_dpc_nameは最も手前の文脈トークンで分離する() -> None:
+    name, leaked = split_dpc_name_and_example("脳腫瘍 脳梗塞のため入院した場合")
+
+    assert name == "脳腫瘍"
+    assert leaked == "脳梗塞のため入院した場合"
 
 
 def test_extracted_casesからsample_case候補を組み立てられる() -> None:
@@ -78,3 +87,55 @@ def test_main_diagnosisは本分類が該当するコードを優先する() -> 
     assert len(cases) == 1
     assert cases[0].main_diagnosis == "I60$"
     assert cases[0].comorbidities == ["S066$"]
+
+
+def test_処置コードは4桁コードも保持する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "脳動脈瘤頚部クリッピング術 K177 を施行した場合。",
+            "guidance_text": "",
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].procedures == ["K177"]
+
+
+def test_ガイダンス中のicdコードは処置コードとして拾わない() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "脳動脈瘤頚部クリッピング術を施行した場合。",
+            "guidance_text": "医療資源病名は硬膜動静脈瘻（I671）を選択する。",
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].procedures == []
+
+
+def test_必須文字列が欠けていると失敗する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "血管内手術を施行した場合。",
+            "guidance_text": None,
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    with pytest.raises(ValueError, match="guidance_text must be a string"):
+        build_sample_case_candidates(extracted, fiscal_year=2026)

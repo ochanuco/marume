@@ -51,7 +51,7 @@ def build_sample_case_candidates(
         combined_example = _join_texts(leaked_example, example_text)
         combined_text = _join_texts(combined_example, guidance_text)
         icd_codes = _dedupe(ICD_PATTERN.findall(combined_text))
-        procedures = _extract_procedures(combined_example, guidance_text)
+        procedures = _extract_procedures(combined_example)
 
         main_diagnosis = _select_main_diagnosis(combined_text, guidance_text, icd_codes)
         diagnoses = [main_diagnosis] if main_diagnosis else []
@@ -83,6 +83,7 @@ def split_dpc_name_and_example(raw_name: str) -> tuple[str, str]:
     """Split leaked example text from a DPC name field."""
 
     normalized = _normalize_space(raw_name)
+    best_split_at: int | None = None
     for token in NARRATIVE_START_TOKENS:
         marker = normalized.find(token)
         if marker <= 0:
@@ -90,7 +91,10 @@ def split_dpc_name_and_example(raw_name: str) -> tuple[str, str]:
         split_at = _find_split_start(normalized, marker)
         if split_at <= 0:
             continue
-        return normalized[:split_at].strip(), normalized[split_at:].strip()
+        if best_split_at is None or split_at < best_split_at:
+            best_split_at = split_at
+    if best_split_at is not None:
+        return normalized[:best_split_at].strip(), normalized[best_split_at:].strip()
     return normalized, ""
 
 
@@ -123,11 +127,7 @@ def _select_main_diagnosis(combined_text: str, guidance_text: str, icd_codes: li
 
 
 def _extract_procedures(*texts: str) -> list[str]:
-    return _dedupe(
-        code
-        for code in PROCEDURE_PATTERN.findall(" ".join(texts))
-        if not re.fullmatch(r"[A-Z][0-9]{2}[0-9A-Z\$]{0,2}", code)
-    )
+    return _dedupe(PROCEDURE_PATTERN.findall(" ".join(texts)))
 
 
 def _build_notes(raw_name: str, leaked_example: str, icd_codes: list[str], procedures: list[str]) -> list[str]:
@@ -171,5 +171,7 @@ def _dedupe(values: list[str] | tuple[str, ...] | object) -> list[str]:
 
 
 def _require_str(row: dict[str, object], key: str) -> str:
-    value = row.get(key, "")
-    return value if isinstance(value, str) else ""
+    value = row.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"{key} must be a string")
+    return value
