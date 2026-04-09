@@ -8,14 +8,16 @@ from pathlib import Path
 
 
 # Source PDFs use full-width parentheses around ICD codes, so these patterns intentionally do the same.
-ICD_PATTERN = re.compile(r"（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
-PROCEDURE_PATTERN = re.compile(r"(?<![（(])([K][0-9]{3,4})(?![）)])")
+ICD_PATTERN = re.compile("\uFF08([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09")
+PROCEDURE_PATTERN = re.compile("(?<![\uFF08(])([K][0-9]{3,4})(?![\uFF09)])")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
 RESOURCE_DIAGNOSIS_PATTERN = re.compile(
-    r"(?:医療資源病名|医療資源を最も投入した傷病名)[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）"
+    "(?:医療資源病名|医療資源を最も投入した傷病名)[^。]*?\uFF08([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09"
 )
-CURRENT_CLASSIFICATION_PATTERN = re.compile(r"本分類[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?が該当")
-GUIDANCE_SELECTION_PATTERN = re.compile(r"([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?(?:を選択する|を選択|が該当)")
+CURRENT_CLASSIFICATION_PATTERN = re.compile(
+    "本分類[^。]*?\uFF08([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09[^。]*?が該当"
+)
+GUIDANCE_SELECTION_PATTERN = re.compile("([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09[^。]*?(?:を選択する|を選択|が該当)")
 REQUIRED_STR_ERROR = "{key} must be a string"
 
 
@@ -50,7 +52,7 @@ def build_sample_case_candidates(
         raw_name = _require_str(row, "dpc_name")
         example_text = _require_str(row, "example_text")
         guidance_text = _require_str(row, "guidance_text")
-        source_page = int(row.get("source_page", 0) or 0)
+        source_page = _parse_source_page(row, idx)
 
         dpc_name, leaked_example = split_dpc_name_and_example(raw_name)
         combined_example = _join_texts(leaked_example, example_text)
@@ -188,3 +190,16 @@ def _require_str(row: dict[str, object], key: str) -> str:
     if not isinstance(value, str):
         raise TypeError(REQUIRED_STR_ERROR.format(key=key))
     return value
+
+
+def _parse_source_page(row: dict[str, object], row_index: int) -> int:
+    value = row.get("source_page", 0)
+    if value in (None, ""):
+        return 0
+    if isinstance(value, bool):
+        raise TypeError(f"source_page must be an integer at row {row_index}")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    raise TypeError(f"source_page must be an integer at row {row_index}: {value!r}")

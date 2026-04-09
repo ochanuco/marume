@@ -52,7 +52,7 @@ mise run coding-cases
 - `DPC_CODING_TEXT_START_PAGE`
 - `DPC_FISCAL_YEAR`
 
-### 手動実行
+## 手動実行
 
 ### 1. PDF から事例を抽出
 

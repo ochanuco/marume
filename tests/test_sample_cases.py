@@ -221,3 +221,37 @@ def test_必須文字列が欠けていると失敗する() -> None:
 
     with pytest.raises(TypeError, match="guidance_text must be a string"):
         build_sample_case_candidates(extracted, fiscal_year=2026)
+
+
+def test_source_pageは文字列の数字を許容する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "血管内手術を施行した場合。",
+            "guidance_text": "医療資源病名は未破裂脳動脈瘤（I671）を選択する。",
+            "raw_text": "",
+            "source_page": "36",
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].source_page == 36
+
+
+def test_source_pageは不正値なら行番号付きで失敗する() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "血管内手術を施行した場合。",
+            "guidance_text": "医療資源病名は未破裂脳動脈瘤（I671）を選択する。",
+            "raw_text": "",
+            "source_page": True,
+        }
+    ]
+
+    with pytest.raises(TypeError, match="source_page must be an integer at row 1"):
+        build_sample_case_candidates(extracted, fiscal_year=2026)
