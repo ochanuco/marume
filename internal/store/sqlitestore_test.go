@@ -108,6 +108,67 @@ func TestSQLiteRuleStoreは指定年度のruleSetを優先して読む(t *testin
 	}
 }
 
+func TestSQLiteRuleStoreは同一年複数PDF版でもReadとLoadで最新PDF由来のruleSetを選ぶ(t *testing.T) {
+	sqlitePath := writeSQLiteFixture(t, "rules-2026.json")
+
+	db, err := sql.Open("sqlite", sqlitePath)
+	if err != nil {
+		t.Fatalf("SQLite fixture の再オープンに失敗しました: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "zzz-older-pdf", 2026, "2026.20260318", "2026-03-18", "build-2026-old-pdf", "2026-04-05T00:00:00Z"); err != nil {
+		t.Fatalf("旧 PDF 版の rule_set 作成に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO rules(rule_id, rule_set_id, priority, dpc_code, label) VALUES (?, ?, ?, ?, ?)`, "R-2026-OLDPDF-00010", "zzz-older-pdf", 10, "111111xx99x0xx", "111111xx99x0xx"); err != nil {
+		t.Fatalf("旧 PDF 版の rule 作成に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO rule_conditions(condition_id, rule_id, condition_type, operator, value_text, value_num, value_json, negated) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`, "R-2026-OLDPDF-00010-01", "R-2026-OLDPDF-00010", "main_diagnosis", "eq", "Z998", nil, nil); err != nil {
+		t.Fatalf("旧 PDF 版の condition 作成に失敗しました: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "aaa-newer-pdf", 2026, "2026.20260325", "2026-03-25", "build-2026-new-pdf", "2026-04-06T00:00:00Z"); err != nil {
+		t.Fatalf("新 PDF 版の rule_set 作成に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO rules(rule_id, rule_set_id, priority, dpc_code, label) VALUES (?, ?, ?, ?, ?)`, "R-2026-NEWPDF-00010", "aaa-newer-pdf", 10, "999999xx99x0xx", "999999xx99x0xx"); err != nil {
+		t.Fatalf("新 PDF 版の rule 作成に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO rule_conditions(condition_id, rule_id, condition_type, operator, value_text, value_num, value_json, negated) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`, "R-2026-NEWPDF-00010-01", "R-2026-NEWPDF-00010", "main_diagnosis", "eq", "Z999", nil, nil); err != nil {
+		t.Fatalf("新 PDF 版の condition 作成に失敗しました: %v", err)
+	}
+
+	ruleStore, err := store.NewSQLiteRuleStore(sqlitePath)
+	if err != nil {
+		t.Fatalf("SQLiteRuleStore の作成に失敗しました: %v", err)
+	}
+
+	readRuleSet, err := ruleStore.ReadRuleSet(context.Background())
+	if err != nil {
+		t.Fatalf("ReadRuleSet に失敗しました: %v", err)
+	}
+
+	loadRuleSet, err := ruleStore.LoadRuleSet(context.Background(), 2026)
+	if err != nil {
+		t.Fatalf("LoadRuleSet(2026) に失敗しました: %v", err)
+	}
+
+	if readRuleSet.BuildID != "build-2026-new-pdf" {
+		t.Fatalf("ReadRuleSet は最新 PDF 版を返すことを期待しましたが、実際は %q でした", readRuleSet.BuildID)
+	}
+	if loadRuleSet.BuildID != "build-2026-new-pdf" {
+		t.Fatalf("LoadRuleSet(2026) は最新 PDF 版を返すことを期待しましたが、実際は %q でした", loadRuleSet.BuildID)
+	}
+	if readRuleSet.BuildID != loadRuleSet.BuildID {
+		t.Fatalf("ReadRuleSet と LoadRuleSet は同じ build を返すことを期待しましたが、実際は %q と %q でした", readRuleSet.BuildID, loadRuleSet.BuildID)
+	}
+	if len(readRuleSet.Rules) != 1 || len(loadRuleSet.Rules) != 1 {
+		t.Fatalf("最新 PDF 版の rule 数は 1 件を期待しましたが、実際は read=%d load=%d でした", len(readRuleSet.Rules), len(loadRuleSet.Rules))
+	}
+	if readRuleSet.Rules[0].ID != "R-2026-NEWPDF-00010" || loadRuleSet.Rules[0].ID != "R-2026-NEWPDF-00010" {
+		t.Fatalf("ReadRuleSet と LoadRuleSet は最新 PDF 版の rule を返すことを期待しましたが、実際は read=%q load=%q でした", readRuleSet.Rules[0].ID, loadRuleSet.Rules[0].ID)
+	}
+}
+
 func TestNewRuleStoreはSQLite拡張子からSQLiteRuleStoreを選ぶ(t *testing.T) {
 	// NewRuleStore は拡張子による選択だけを担い、このテストでは存在確認までは求めない。
 	ruleStore, err := store.NewRuleStore("rules/rules-2026.sqlite")
