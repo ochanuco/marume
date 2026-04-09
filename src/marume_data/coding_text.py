@@ -183,9 +183,7 @@ def _normalize_text(text: str) -> str:
 
 def _is_header_line(line: str) -> bool:
     compact = re.sub(r"\s+", "", line)
-    return compact.startswith(
-        ("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称", "事例", "対応", "<<PAGE:")
-    )
+    return compact.startswith(("別添", "付録", "Ⅴ.付録", "DPC上6桁", "DPC上６桁", "DPC名称", "事例", "対応"))
 
 
 def _looks_like_narrative(line: str) -> bool:

@@ -11,6 +11,8 @@ from marume_data.coding_text import extract_coding_cases_from_pdf, write_coding_
 
 
 DEFAULT_PDF_URL = "https://www.mhlw.go.jp/content/12404000/001394024.pdf"
+DEFAULT_DOWNLOAD_TIMEOUT = 60
+DEFAULT_USER_AGENT = "marume-data/0.1.0"
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,7 +55,8 @@ def _download_pdf(url: str) -> Path:
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("url must use http or https")
 
-    with urllib.request.urlopen(url, timeout=10) as response:
+    request = urllib.request.Request(url, headers={"User-Agent": DEFAULT_USER_AGENT})
+    with urllib.request.urlopen(request, timeout=DEFAULT_DOWNLOAD_TIMEOUT) as response:
         suffix = Path(parsed.path).suffix or ".pdf"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
             while chunk := response.read(65536):

@@ -24,11 +24,11 @@ def main() -> int:
             raise TypeError("input JSON must be an array")
         cases = build_sample_case_candidates(extracted, fiscal_year=args.fiscal_year)
         write_sample_case_candidates_json(args.output, cases)
+        print(f"{args.output} ({len(cases)} cases)")
+        return 0
     except Exception as exc:
         print(f"sample case generation failed: {exc}", file=sys.stderr)
         return 1
-    print(f"{args.output} ({len(cases)} cases)")
-    return 0
 
 
 if __name__ == "__main__":
