@@ -98,11 +98,11 @@ def test_start_page指定時は見出し前提にせず抽出を始める(monkey
                 FakePage("010010 脳腫瘍\n頭頂葉神経膠腫の摘出術を行った場合。\n医療資源病名は頭頂葉神経膠腫（C713）を選択する。"),
             ]
 
-    monkeypatch.setattr("marume_data.coding_text.PdfReader", FakeReader)
+    import marume_data.coding_text as coding_text_module
 
-    from marume_data.coding_text import extract_coding_cases_from_pdf
+    monkeypatch.setattr(coding_text_module, "PdfReader", FakeReader)
 
-    cases = extract_coding_cases_from_pdf(Path("dummy.pdf"), start_page=2)
+    cases = coding_text_module.extract_coding_cases_from_pdf(Path("dummy.pdf"), start_page=2)
 
     assert len(cases) == 1
     assert cases[0].dpc_code == "010010"

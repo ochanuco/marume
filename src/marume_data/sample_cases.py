@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+# Source PDFs use full-width parentheses around ICD codes, so these patterns intentionally do the same.
 ICD_PATTERN = re.compile(r"（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
 PROCEDURE_PATTERN = re.compile(r"(?<![（(])([A-Z][0-9]{3,4})(?![）)])")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
@@ -15,6 +16,7 @@ RESOURCE_DIAGNOSIS_PATTERN = re.compile(
 )
 CURRENT_CLASSIFICATION_PATTERN = re.compile(r"本分類[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?が該当")
 GUIDANCE_SELECTION_PATTERN = re.compile(r"([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）[^。]*?(?:を選択する|を選択|が該当)")
+REQUIRED_STR_ERROR = "{key} must be a string"
 
 
 @dataclass(slots=True)
@@ -148,6 +150,13 @@ def _build_notes(raw_name: str, leaked_example: str, icd_codes: list[str], proce
 
 
 def _find_split_start(text: str, marker: int) -> int:
+    """Find the best split index for leaked narrative text.
+
+    The caller passes only positive markers, but this helper returns 0 defensively
+    when marker is zero or negative.
+    """
+    if marker <= 0:
+        return 0
     punctuation = max(text.rfind("。", 0, marker), text.rfind("、", 0, marker))
     if punctuation >= 0:
         return punctuation + 1
@@ -177,5 +186,5 @@ def _dedupe(values: Iterable[str]) -> list[str]:
 def _require_str(row: dict[str, object], key: str) -> str:
     value = row.get(key)
     if not isinstance(value, str):
-        raise TypeError(f"{key} must be a string")
+        raise TypeError(REQUIRED_STR_ERROR.format(key=key))
     return value

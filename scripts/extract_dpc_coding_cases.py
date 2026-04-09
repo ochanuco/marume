@@ -56,7 +56,8 @@ def _download_pdf(url: str) -> Path:
     with urllib.request.urlopen(url, timeout=10) as response:
         suffix = Path(parsed.path).suffix or ".pdf"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
-            handle.write(response.read())
+            while chunk := response.read(65536):
+                handle.write(chunk)
             return Path(handle.name)
 
 

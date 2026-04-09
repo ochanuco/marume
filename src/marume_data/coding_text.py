@@ -112,6 +112,8 @@ def write_coding_cases_json(output_path: Path, cases: list[CodingTextCase]) -> N
 
 
 def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase | None:
+    if not block:
+        return None
     match = CASE_CODE_PATTERN.match(block[0])
     if match is None:
         return None

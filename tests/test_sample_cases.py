@@ -43,12 +43,40 @@ def test_extracted_casesからsample_case候補を組み立てられる() -> Non
 
     assert len(cases) == 2
     assert cases[0].case_id == "dpc-010030-0001"
+    assert cases[1].case_id == "dpc-010020-0002"
     assert cases[0].dpc_name == "未破裂脳動脈瘤"
     assert cases[0].main_diagnosis == "I671"
-    assert "硬膜動静脈瘻のため、 血管内手術を施行した場合。" == cases[0].example_text
+    assert cases[0].example_text == "硬膜動静脈瘻のため、 血管内手術を施行した場合。"
     assert cases[0].procedures == []
     assert "処置コード未抽出" in cases[0].notes
     assert cases[1].main_diagnosis == "I601"
+
+
+def test_case_idはdpc_codeごとにリセットせず通し番号になる() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "血管内手術を施行した場合。",
+            "guidance_text": "医療資源病名は未破裂脳動脈瘤（I671）を選択する。",
+            "raw_text": "",
+            "source_page": 36,
+        },
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "脳動脈瘤頚部クリッピング術を施行した場合。",
+            "guidance_text": "医療資源病名は未破裂脳動脈瘤（I671）を選択する。",
+            "raw_text": "",
+            "source_page": 37,
+        },
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 2
+    assert cases[0].case_id == "dpc-010030-0001"
+    assert cases[1].case_id == "dpc-010030-0002"
 
 
 def test_main_diagnosisは不適切コードではなく選択されるコードを優先する() -> None:
