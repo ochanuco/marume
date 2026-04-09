@@ -40,12 +40,20 @@ def extract_coding_cases_from_pdf(
     start_page: int | None = None,
     end_page: int | None = None,
 ) -> list[CodingTextCase]:
-    """Extract DPC coding cases from the appendix section of a coding text PDF."""
+    """Extract DPC coding cases from the appendix section of a coding text PDF.
+
+    When `start_page` is provided, parsing starts from that page immediately and
+    appendix-heading detection is skipped.
+    """
 
     reader = PdfReader(str(pdf_path))
     page_count = len(reader.pages)
     page_start = max(1, start_page or 1)
     page_end = min(page_count, end_page or page_count)
+    if page_start > page_count:
+        raise ValueError(f"start_page {page_start} exceeds page count {page_count}")
+    if page_end < page_start:
+        raise ValueError(f"end_page {page_end} is before start_page {page_start}")
 
     in_appendix = start_page is not None
     combined_lines: list[str] = []
@@ -119,23 +127,23 @@ def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase |
         return None
 
     dpc_code = match.group("code")
-    remaining = []
+    remaining_lines = []
     if match.group("name"):
-        remaining.append(match.group("name"))
-    remaining.extend(block[1:])
-    remaining = [line for line in remaining if line]
-    if not remaining:
+        remaining_lines.append(match.group("name"))
+    remaining_lines.extend(block[1:])
+    remaining_lines = [line for line in remaining_lines if line]
+    if not remaining_lines:
         return None
 
     name_lines: list[str] = []
     idx = 0
-    while idx < len(remaining):
-        if _looks_like_narrative(remaining[idx]):
+    while idx < len(remaining_lines):
+        if _looks_like_narrative(remaining_lines[idx]):
             break
-        name_lines.append(remaining[idx])
+        name_lines.append(remaining_lines[idx])
         idx += 1
 
-    narrative = remaining[idx:]
+    narrative = remaining_lines[idx:]
     if not name_lines and narrative:
         name_lines.append(narrative[0])
         narrative = narrative[1:]
@@ -153,7 +161,7 @@ def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase |
         dpc_name=_join_lines(name_lines),
         example_text=_join_lines(example_lines),
         guidance_text=_join_lines(guidance_lines),
-        raw_text=_join_lines(remaining),
+        raw_text=_join_lines(remaining_lines),
         source_page=source_page,
     )
 
