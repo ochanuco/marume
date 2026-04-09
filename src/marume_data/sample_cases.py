@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Source PDFs use full-width parentheses around ICD codes, so these patterns intentionally do the same.
 ICD_PATTERN = re.compile(r"（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）")
-PROCEDURE_PATTERN = re.compile(r"(?<![（(])([A-Z][0-9]{3,4})(?![）)])")
+PROCEDURE_PATTERN = re.compile(r"(?<![（(])([K][0-9]{3,4})(?![）)])")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
 RESOURCE_DIAGNOSIS_PATTERN = re.compile(
     r"(?:医療資源病名|医療資源を最も投入した傷病名)[^。]*?（([A-Z][0-9]{2}[0-9A-Z\$]{0,2})）"

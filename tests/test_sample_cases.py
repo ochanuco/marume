@@ -135,6 +135,24 @@ def test_処置コードは4桁コードも保持する() -> None:
     assert cases[0].procedures == ["K177"]
 
 
+def test_kコード以外は処置コードとして拾わない() -> None:
+    extracted = [
+        {
+            "dpc_code": "010030",
+            "dpc_name": "未破裂脳動脈瘤",
+            "example_text": "J045 を施行した場合。",
+            "guidance_text": "",
+            "raw_text": "",
+            "source_page": 36,
+        }
+    ]
+
+    cases = build_sample_case_candidates(extracted, fiscal_year=2026)
+
+    assert len(cases) == 1
+    assert cases[0].procedures == []
+
+
 def test_ガイダンス中のicdコードは処置コードとして拾わない() -> None:
     extracted = [
         {
