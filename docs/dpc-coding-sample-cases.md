@@ -37,6 +37,23 @@
 uv sync
 ```
 
+### mise タスクを使った実行
+
+```bash
+mise run coding-cases
+```
+
+このコマンドで、`scripts/extract_dpc_coding_cases.py` と `scripts/build_dpc_sample_cases.py` が順に実行されます。
+
+必要なら次の環境変数で対象 PDF や出力バージョン、会計年度を上書きできます。
+
+- `DPC_CODING_TEXT_URL`
+- `DPC_CODING_TEXT_VERSION`
+- `DPC_CODING_TEXT_START_PAGE`
+- `DPC_FISCAL_YEAR`
+
+### 手動実行
+
 ### 1. PDF から事例を抽出
 
 ```bash
