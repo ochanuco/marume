@@ -110,6 +110,7 @@ func TestSQLiteRuleStoreは指定年度のruleSetを優先して読む(t *testin
 
 func TestSQLiteRuleStoreは同一年複数PDF版でもReadとLoadで最新PDF由来のruleSetを選ぶ(t *testing.T) {
 	sqlitePath := writeSQLiteFixture(t, "rules-2026.json")
+	const fiscalYear = 2026
 
 	db, err := sql.Open("sqlite", sqlitePath)
 	if err != nil {
@@ -117,7 +118,23 @@ func TestSQLiteRuleStoreは同一年複数PDF版でもReadとLoadで最新PDF由
 	}
 	defer func() { _ = db.Close() }()
 
-	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "zzz-older-pdf", 2026, "2026.20260318", "2026-03-18", "build-2026-old-pdf", "2026-04-05T00:00:00Z"); err != nil {
+	// このテストで使う fiscal_year=2026 のデータを固定化して、fixture 更新の影響を排除する。
+	if _, err := db.Exec(`DELETE FROM rule_conditions
+		WHERE rule_id IN (
+			SELECT rule_id FROM rules
+			WHERE rule_set_id IN (SELECT rule_set_id FROM rule_sets WHERE fiscal_year = ?)
+		)`, fiscalYear); err != nil {
+		t.Fatalf("既存 condition の削除に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM rules
+		WHERE rule_set_id IN (SELECT rule_set_id FROM rule_sets WHERE fiscal_year = ?)`, fiscalYear); err != nil {
+		t.Fatalf("既存 rule の削除に失敗しました: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM rule_sets WHERE fiscal_year = ?`, fiscalYear); err != nil {
+		t.Fatalf("既存 rule_set の削除に失敗しました: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "zzz-older-pdf", fiscalYear, "2026.20260318", "2026-03-18", "build-2026-old-pdf", "2026-04-05T00:00:00Z"); err != nil {
 		t.Fatalf("旧 PDF 版の rule_set 作成に失敗しました: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO rules(rule_id, rule_set_id, priority, dpc_code, label) VALUES (?, ?, ?, ?, ?)`, "R-2026-OLDPDF-00010", "zzz-older-pdf", 10, "111111xx99x0xx", "111111xx99x0xx"); err != nil {
@@ -127,7 +144,7 @@ func TestSQLiteRuleStoreは同一年複数PDF版でもReadとLoadで最新PDF由
 		t.Fatalf("旧 PDF 版の condition 作成に失敗しました: %v", err)
 	}
 
-	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "aaa-newer-pdf", 2026, "2026.20260325", "2026-03-25", "build-2026-new-pdf", "2026-04-06T00:00:00Z"); err != nil {
+	if _, err := db.Exec(`INSERT INTO rule_sets(rule_set_id, fiscal_year, rule_version, source_published_at, build_id, built_at) VALUES (?, ?, ?, ?, ?, ?)`, "aaa-newer-pdf", fiscalYear, "2026.20260325", "2026-03-25", "build-2026-new-pdf", "2026-04-06T00:00:00Z"); err != nil {
 		t.Fatalf("新 PDF 版の rule_set 作成に失敗しました: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO rules(rule_id, rule_set_id, priority, dpc_code, label) VALUES (?, ?, ?, ?, ?)`, "R-2026-NEWPDF-00010", "aaa-newer-pdf", 10, "999999xx99x0xx", "999999xx99x0xx"); err != nil {
@@ -147,16 +164,16 @@ func TestSQLiteRuleStoreは同一年複数PDF版でもReadとLoadで最新PDF由
 		t.Fatalf("ReadRuleSet に失敗しました: %v", err)
 	}
 
-	loadRuleSet, err := ruleStore.LoadRuleSet(context.Background(), 2026)
+	loadRuleSet, err := ruleStore.LoadRuleSet(context.Background(), fiscalYear)
 	if err != nil {
-		t.Fatalf("LoadRuleSet(2026) に失敗しました: %v", err)
+		t.Fatalf("LoadRuleSet(%d) に失敗しました: %v", fiscalYear, err)
 	}
 
 	if readRuleSet.BuildID != "build-2026-new-pdf" {
 		t.Fatalf("ReadRuleSet は最新 PDF 版を返すことを期待しましたが、実際は %q でした", readRuleSet.BuildID)
 	}
 	if loadRuleSet.BuildID != "build-2026-new-pdf" {
-		t.Fatalf("LoadRuleSet(2026) は最新 PDF 版を返すことを期待しましたが、実際は %q でした", loadRuleSet.BuildID)
+		t.Fatalf("LoadRuleSet(%d) は最新 PDF 版を返すことを期待しましたが、実際は %q でした", fiscalYear, loadRuleSet.BuildID)
 	}
 	if readRuleSet.BuildID != loadRuleSet.BuildID {
 		t.Fatalf("ReadRuleSet と LoadRuleSet は同じ build を返すことを期待しましたが、実際は %q と %q でした", readRuleSet.BuildID, loadRuleSet.BuildID)
