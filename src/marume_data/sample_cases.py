@@ -117,9 +117,9 @@ def build_case_input_candidates(candidates: Iterable[SampleCaseCandidate]) -> li
                 case_id=candidate.case_id,
                 fiscal_year=candidate.fiscal_year,
                 main_diagnosis=candidate.main_diagnosis,
-                diagnoses=candidate.diagnoses,
-                procedures=candidate.procedures,
-                comorbidities=candidate.comorbidities,
+                diagnoses=list(candidate.diagnoses),
+                procedures=list(candidate.procedures),
+                comorbidities=list(candidate.comorbidities),
                 age=candidate.age,
                 sex=candidate.sex,
             )
