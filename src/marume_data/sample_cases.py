@@ -209,7 +209,7 @@ def _case_input_payload(candidate: CaseInputCandidate) -> dict[str, object]:
 
 
 def _case_input_skip_reason(candidate: SampleCaseCandidate) -> str | None:
-    if not candidate.main_diagnosis:
+    if not candidate.main_diagnosis.strip():
         return "main_diagnosis 未抽出"
     return None
 

@@ -139,6 +139,7 @@ uv run python scripts/build_dpc_sample_cases.py \
 - `comorbidities`
 
 `main_diagnosis` が空の候補は `marume validate` を通せないため、この JSONL からは除外します。
+`age` は任意項目です。実装上は `src/marume_data/sample_cases.py` の `_case_input_payload` で、値が未設定のときは JSONL から省略します。
 
 生成件数と除外理由は `.local/dpc-case-input-candidates-v6-report.json` に出します。
 
