@@ -44,6 +44,8 @@ mise run coding-cases
 ```
 
 このコマンドで、`scripts/extract_dpc_coding_cases.py` と `scripts/build_dpc_sample_cases.py` が順に実行されます。
+生成される `case-input` JSONL は、`marume validate` / `classify-batch` に渡せる縦切り確認用の候補です。
+`main_diagnosis` が空の候補は JSONL から除外し、レポートに skip 件数として残します。
 
 必要なら次の環境変数で対象 PDF や出力バージョン、会計年度を上書きできます（mise タスク実行時のみ有効）。
 
@@ -80,6 +82,8 @@ uv run python scripts/extract_dpc_coding_cases.py \
 uv run python scripts/build_dpc_sample_cases.py \
   --input .local/dpc-coding-cases-v6.json \
   --output .local/dpc-sample-case-candidates-v6.json \
+  --case-input-jsonl .local/dpc-case-input-candidates-v6.jsonl \
+  --report .local/dpc-case-input-candidates-v6-report.json \
   --fiscal-year 2026
 ```
 
@@ -118,6 +122,31 @@ uv run python scripts/build_dpc_sample_cases.py \
 - `example_text`
 - `guidance_text`
 - `notes`
+
+### `marume` 入力候補
+
+`.local/dpc-case-input-candidates-v6.jsonl`
+
+`marume` の `case-input` に合わせた JSONL です。上の症例候補から次の項目だけを取り出します。
+
+- `case_id`
+- `fiscal_year`
+- `age`
+- `sex`
+- `main_diagnosis`
+- `diagnoses`
+- `procedures`
+- `comorbidities`
+
+`main_diagnosis` が空の候補は `marume validate` を通せないため、この JSONL からは除外します。
+
+生成件数と除外理由は `.local/dpc-case-input-candidates-v6-report.json` に出します。
+
+最低限の入力検証は次のように確認できます。
+
+```bash
+head -n 1 .local/dpc-case-input-candidates-v6.jsonl | ./marume validate --input -
+```
 
 ## 現状の限界
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 import json
 import re
@@ -39,12 +40,27 @@ class SampleCaseCandidate:
     notes: list[str]
 
 
+@dataclass(slots=True)
+class CaseInputCandidate:
+    case_id: str
+    fiscal_year: int
+    main_diagnosis: str
+    diagnoses: list[str]
+    procedures: list[str]
+    comorbidities: list[str]
+    age: int | None = None
+    sex: str = ""
+
+
 def build_sample_case_candidates(
     extracted_cases: list[dict[str, object]],
     *,
     fiscal_year: int,
 ) -> list[SampleCaseCandidate]:
     """Convert extracted coding text cases into marume-friendly sample candidates."""
+
+    if fiscal_year <= 0:
+        raise ValueError(f"fiscal_year must be positive: {fiscal_year!r}")
 
     candidates: list[SampleCaseCandidate] = []
     for idx, row in enumerate(extracted_cases, start=1):
@@ -89,6 +105,52 @@ def build_sample_case_candidates(
     return candidates
 
 
+def build_case_input_candidates(candidates: Iterable[SampleCaseCandidate]) -> list[CaseInputCandidate]:
+    """Build marume case-input candidates that can pass the CLI's minimum validation."""
+
+    case_inputs: list[CaseInputCandidate] = []
+    for candidate in candidates:
+        if _case_input_skip_reason(candidate) is not None:
+            continue
+        case_inputs.append(
+            CaseInputCandidate(
+                case_id=candidate.case_id,
+                fiscal_year=candidate.fiscal_year,
+                main_diagnosis=candidate.main_diagnosis,
+                diagnoses=candidate.diagnoses,
+                procedures=candidate.procedures,
+                comorbidities=candidate.comorbidities,
+                age=candidate.age,
+                sex=candidate.sex,
+            )
+        )
+    return case_inputs
+
+
+def build_case_input_candidate_report(
+    candidates: Iterable[SampleCaseCandidate],
+) -> dict[str, object]:
+    """Summarize generated case inputs and review-oriented skip counts."""
+
+    candidate_list = list(candidates)
+    note_counts: Counter[str] = Counter()
+    skipped_reasons: Counter[str] = Counter()
+    skipped_count = 0
+    for candidate in candidate_list:
+        note_counts.update(candidate.notes)
+        if reason := _case_input_skip_reason(candidate):
+            skipped_count += 1
+            skipped_reasons[reason] += 1
+
+    return {
+        "total_candidates": len(candidate_list),
+        "case_input_candidates": len(candidate_list) - skipped_count,
+        "skipped_candidates": skipped_count,
+        "skipped_reasons": dict(skipped_reasons),
+        "review_note_counts": dict(note_counts),
+    }
+
+
 def split_dpc_name_and_example(raw_name: str) -> tuple[str, str]:
     """Split leaked example text from a DPC name field."""
 
@@ -114,6 +176,42 @@ def write_sample_case_candidates_json(output_path: Path, candidates: list[Sample
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = [asdict(candidate) for candidate in candidates]
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_case_input_candidates_jsonl(output_path: Path, candidates: list[CaseInputCandidate]) -> None:
+    """Write marume case-input candidates as UTF-8 JSONL."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(_case_input_payload(candidate), ensure_ascii=False) for candidate in candidates]
+    output_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
+def write_case_input_candidate_report_json(output_path: Path, report: dict[str, object]) -> None:
+    """Write a compact generation report as UTF-8 JSON."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _case_input_payload(candidate: CaseInputCandidate) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "case_id": candidate.case_id,
+        "fiscal_year": candidate.fiscal_year,
+        "sex": candidate.sex,
+        "main_diagnosis": candidate.main_diagnosis,
+        "diagnoses": candidate.diagnoses,
+        "procedures": candidate.procedures,
+        "comorbidities": candidate.comorbidities,
+    }
+    if candidate.age is not None:
+        payload["age"] = candidate.age
+    return payload
+
+
+def _case_input_skip_reason(candidate: SampleCaseCandidate) -> str | None:
+    if not candidate.main_diagnosis:
+        return "main_diagnosis 未抽出"
+    return None
 
 
 def _select_main_diagnosis(combined_text: str, guidance_text: str, icd_codes: list[str]) -> str:

@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from marume_data.sample_cases import build_sample_case_candidates, split_dpc_name_and_example
+from marume_data.sample_cases import (
+    build_case_input_candidate_report,
+    build_case_input_candidates,
+    build_sample_case_candidates,
+    split_dpc_name_and_example,
+    write_case_input_candidates_jsonl,
+)
 
 
 def _make_extracted_case(**overrides: object) -> dict[str, object]:
@@ -232,3 +240,74 @@ def test_source_pageは不正値なら行番号付きで失敗する() -> None:
 
     with pytest.raises(TypeError, match="source_page must be an integer at row 1"):
         build_sample_case_candidates(extracted, fiscal_year=2026)
+
+
+def test_fiscal_yearは正の整数だけを許容する() -> None:
+    with pytest.raises(ValueError, match="fiscal_year must be positive"):
+        build_sample_case_candidates([_make_extracted_case()], fiscal_year=0)
+
+
+def test_marume_case_input候補はmain_diagnosisがあるものだけをjsonl化する(tmp_path) -> None:
+    # Test data intentionally uses fullwidth parentheses to match source document format
+    # ruff: noqa: RUF001
+    candidates = build_sample_case_candidates(
+        [
+            _make_extracted_case(
+                example_text="脳動脈瘤頚部クリッピング術 K177 を施行した場合。",
+            ),
+            _make_extracted_case(
+                dpc_code="010040",
+                dpc_name="なし",
+                example_text="コードを含まない事例。",
+                guidance_text="",
+            ),
+        ],
+        fiscal_year=2026,
+    )
+
+    case_inputs = build_case_input_candidates(candidates)
+    output_path = tmp_path / "cases.jsonl"
+    write_case_input_candidates_jsonl(output_path, case_inputs)
+
+    assert len(case_inputs) == 1
+    assert case_inputs[0].case_id == "dpc-010030-0001"
+    assert case_inputs[0].main_diagnosis == "I671"
+    lines = output_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0]) == {
+        "case_id": "dpc-010030-0001",
+        "fiscal_year": 2026,
+        "sex": "",
+        "main_diagnosis": "I671",
+        "diagnoses": ["I671"],
+        "procedures": ["K177"],
+        "comorbidities": [],
+    }
+
+
+def test_case_input候補レポートはskip理由とレビューnote件数を返す() -> None:
+    # Test data intentionally uses fullwidth parentheses to match source document format
+    # ruff: noqa: RUF001
+    candidates = build_sample_case_candidates(
+        [
+            _make_extracted_case(),
+            _make_extracted_case(
+                dpc_code="010040",
+                dpc_name="なし",
+                example_text="コードを含まない事例。",
+                guidance_text="",
+            ),
+        ],
+        fiscal_year=2026,
+    )
+
+    report = build_case_input_candidate_report(candidates)
+
+    assert report["total_candidates"] == 2
+    assert report["case_input_candidates"] == 1
+    assert report["skipped_candidates"] == 1
+    assert report["skipped_reasons"] == {"main_diagnosis 未抽出": 1}
+    assert report["review_note_counts"] == {
+        "処置コード未抽出": 2,
+        "ICD コード未抽出": 1,
+    }
