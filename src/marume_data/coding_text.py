@@ -153,6 +153,9 @@ def _parse_case_block(block: list[str], *, source_page: int) -> CodingTextCase |
     if not name_lines and narrative:
         name_lines.append(narrative[0])
         narrative = narrative[1:]
+        while narrative and not _looks_like_narrative(narrative[0]):
+            name_lines.append(narrative[0])
+            narrative = narrative[1:]
 
     split_idx = _find_guidance_start(narrative)
     if split_idx is None:
