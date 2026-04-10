@@ -22,7 +22,7 @@ run = "uv run python scripts/extract_dpc_coding_cases.py --url ${DPC_CODING_TEXT
 [tasks.coding-cases-build]
 description = "抽出済み DPC コーディング事例から marume 向け症例候補 JSON を生成"
 depends = ["coding-cases-extract"]
-run = "uv run python scripts/build_dpc_sample_cases.py --input .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --output .local/dpc-sample-case-candidates-${DPC_CODING_TEXT_VERSION:-v6}.json --fiscal-year ${DPC_FISCAL_YEAR:-2026}"
+run = "uv run python scripts/build_dpc_sample_cases.py --input .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --output .local/dpc-sample-case-candidates-${DPC_CODING_TEXT_VERSION:-v6}.json --case-input-jsonl .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}.jsonl --report .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}-report.json --fiscal-year ${DPC_FISCAL_YEAR:-2026}"
 
 [tasks.coding-cases]
 description = "DPC コーディング事例の抽出から症例候補 JSON 生成までをまとめて実行"
