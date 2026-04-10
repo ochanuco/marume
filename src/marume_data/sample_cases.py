@@ -132,19 +132,22 @@ def build_case_input_candidate_report(
 ) -> dict[str, object]:
     """Summarize generated case inputs and review-oriented skip counts."""
 
-    candidate_list = list(candidates)
+    total_count = 0
     note_counts: Counter[str] = Counter()
     skipped_reasons: Counter[str] = Counter()
     skipped_count = 0
-    for candidate in candidate_list:
+    for candidate in candidates:
+        total_count += 1
         note_counts.update(candidate.notes)
         if reason := _case_input_skip_reason(candidate):
             skipped_count += 1
             skipped_reasons[reason] += 1
 
+    case_input_candidates = total_count - skipped_count
+
     return {
-        "total_candidates": len(candidate_list),
-        "case_input_candidates": len(candidate_list) - skipped_count,
+        "total_candidates": total_count,
+        "case_input_candidates": case_input_candidates,
         "skipped_candidates": skipped_count,
         "skipped_reasons": dict(skipped_reasons),
         "review_note_counts": dict(note_counts),
@@ -182,8 +185,9 @@ def write_case_input_candidates_jsonl(output_path: Path, candidates: list[CaseIn
     """Write marume case-input candidates as UTF-8 JSONL."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(_case_input_payload(candidate), ensure_ascii=False) for candidate in candidates]
-    output_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    with output_path.open("w", encoding="utf-8") as f:
+        for candidate in candidates:
+            f.write(json.dumps(_case_input_payload(candidate), ensure_ascii=False) + "\n")
 
 
 def write_case_input_candidate_report_json(output_path: Path, report: dict[str, object]) -> None:
