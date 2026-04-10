@@ -11,6 +11,7 @@ from pathlib import Path
 # Source PDFs use full-width parentheses around ICD codes, so these patterns intentionally do the same.
 ICD_PATTERN = re.compile("\uFF08([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09")
 PROCEDURE_PATTERN = re.compile("(?<![\uFF08(])([K][0-9]{3,4})(?![\uFF09)])")
+PROCEDURE_CONTEXT_PATTERN = re.compile("(?:手術|術|処置|施行)")
 NARRATIVE_START_TOKENS = ("について", "場合", "入院", "施行", "判明", "発症", "併発", "疑い", "ため", "対し")
 RESOURCE_DIAGNOSIS_PATTERN = re.compile(
     "(?:医療資源病名|医療資源を最も投入した傷病名)[^。]*?\uFF08([A-Z][0-9]{2}[0-9A-Z\\$]{0,2})\uFF09"
@@ -240,7 +241,13 @@ def _select_main_diagnosis(combined_text: str, guidance_text: str, icd_codes: li
 
 
 def _extract_procedures(*texts: str) -> list[str]:
-    return _dedupe(PROCEDURE_PATTERN.findall(" ".join(texts)))
+    text = " ".join(texts)
+    procedures: list[str] = []
+    for match in PROCEDURE_PATTERN.finditer(text):
+        context = text[max(0, match.start() - 20) : match.end() + 20]
+        if PROCEDURE_CONTEXT_PATTERN.search(context):
+            procedures.append(match.group(1))
+    return _dedupe(procedures)
 
 
 def _build_notes(raw_name: str, leaked_example: str, icd_codes: list[str], procedures: list[str]) -> list[str]:
