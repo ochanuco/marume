@@ -338,6 +338,31 @@ func TestSchemaCapabilitiesResultは入れ子のshapeも返す(t *testing.T) {
 	if !ok || len(globalFlagRequired) == 0 {
 		t.Fatalf("global_flags.items.required を期待しましたが、実際は %v でした", globalFlagItems["required"])
 	}
+	globalFlagProperties, ok := globalFlagItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items.properties を期待しましたが、実際は %v でした", globalFlagItems["properties"])
+	}
+	globalFlagDefault, ok := globalFlagProperties["default"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items.properties.default を期待しましたが、実際は %v でした", globalFlagProperties["default"])
+	}
+	globalFlagDefaultAnyOf, ok := globalFlagDefault["anyOf"].([]any)
+	if !ok || len(globalFlagDefaultAnyOf) == 0 {
+		t.Fatalf("global_flags.items.properties.default.anyOf を期待しましたが、実際は %v でした", globalFlagDefault["anyOf"])
+	}
+	foundBooleanDefault := false
+	for _, rawVariant := range globalFlagDefaultAnyOf {
+		variant, ok := rawVariant.(map[string]any)
+		if !ok {
+			continue
+		}
+		if variant["type"] == "boolean" {
+			foundBooleanDefault = true
+		}
+	}
+	if !foundBooleanDefault {
+		t.Fatalf("global_flags.items.properties.default は boolean を許容する想定でした: %v", globalFlagDefault)
+	}
 
 	commandsField, ok := properties["commands"].(map[string]any)
 	if !ok {
@@ -502,6 +527,29 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 			t.Fatalf("%s コマンドが一覧にありません: %v", name, commands)
 		}
 	}
+	globalFlags, ok := result["global_flags"].([]any)
+	if !ok {
+		t.Fatalf("global_flags を期待しましたが、実際は %v でした", result["global_flags"])
+	}
+	if len(globalFlags) == 0 {
+		t.Fatal("global_flags が空でした")
+	}
+	foundJSONErrors := false
+	for _, rawFlag := range globalFlags {
+		flag, ok := rawFlag.(map[string]any)
+		if !ok {
+			continue
+		}
+		if flag["name"] == "--json-errors" {
+			foundJSONErrors = true
+			if flag["default"] != false {
+				t.Fatalf("--json-errors の default は false を期待しましたが、実際は %v でした", flag["default"])
+			}
+		}
+	}
+	if !foundJSONErrors {
+		t.Fatalf("--json-errors が global_flags にありません: %v", globalFlags)
+	}
 
 	for _, item := range commands {
 		command, ok := item.(map[string]any)
@@ -576,7 +624,7 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 			continue
 		}
 		foundFileNotFound = true
-		if doc["description"] != "--input で指定した入力ファイルが見つからない" {
+		if doc["description"] != "指定された入力または出力ファイルが見つからない" {
 			t.Fatalf("FILE_NOT_FOUND の説明が runtime と一致しません: %v", doc["description"])
 		}
 	}

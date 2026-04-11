@@ -447,6 +447,7 @@ func runCapabilities(args []string, stdout, stderr io.Writer) error {
 				Name:        "--json-errors",
 				Type:        "bool",
 				Description: "失敗時に構造化エラーJSONを標準エラーへ出します",
+				Default:     false,
 			},
 		},
 		"commands":   commandCapabilities(defaultRulesPath),
@@ -531,7 +532,7 @@ type capabilityFlag struct {
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	Required    bool   `json:"required,omitempty"`
-	Default     string `json:"default,omitempty"`
+	Default     any    `json:"default,omitempty"`
 }
 
 type capabilityArg struct {
@@ -998,13 +999,16 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			Summary:      "CLI のコマンド・フラグ・終了コード・スキーマ一覧を返します",
 			OutputSchema: capabilitiesResultSchema.Name,
 			Examples:     []string{"marume capabilities"},
+			Flags: []capabilityFlag{
+				{Name: "--json-errors", Type: "bool", Description: "失敗時に構造化エラーJSONを標準エラーへ出す", Default: false},
+			},
 		},
 		{
 			Name:     "schema",
 			Summary:  "JSON Schema を返します",
 			Examples: []string{"marume schema case-input", "marume schema --list"},
 			Flags: []capabilityFlag{
-				{Name: "--list", Type: "bool", Description: "利用可能なスキーマ名を表示する"},
+				{Name: "--list", Type: "bool", Description: "利用可能なスキーマ名を表示する", Default: false},
 			},
 			PositionalArgs: []capabilityArg{
 				{Name: "name", Type: "string", Description: "返したいスキーマ名。--list を使わない場合に指定する"},
@@ -1025,7 +1029,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 						{Name: "--preset", Type: "string", Description: "生成する症例プリセット名", Default: "ok"},
 						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
 						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
-						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す", Default: false},
 					},
 				},
 				{
@@ -1038,7 +1042,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 						{Name: "--preset", Type: "string", Description: "生成するバッチプリセット名", Default: "basic"},
 						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
 						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
-						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す", Default: false},
 					},
 				},
 				{
@@ -1051,7 +1055,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 						{Name: "--preset", Type: "string", Description: "生成するルールセットプリセット名", Default: "minimal"},
 						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
 						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
-						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す", Default: false},
 					},
 				},
 				{
@@ -1066,7 +1070,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 						{Name: "--case-preset", Type: "string", Description: "case 用プリセット名", Default: "ok"},
 						{Name: "--batch-preset", Type: "string", Description: "batch 用プリセット名", Default: "basic"},
 						{Name: "--rules-preset", Type: "string", Description: "rules 用プリセット名", Default: "minimal"},
-						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す", Default: false},
 					},
 				},
 			},
@@ -1098,7 +1102,7 @@ func exitCodeDocs() []exitCodeDoc {
 		{Code: 0, Name: "OK", Description: "正常終了"},
 		{Code: 1, Name: "INVALID_INPUT", Description: "入力値、引数、または年度不一致などの利用エラー"},
 		{Code: 2, Name: "NO_CLASSIFICATION", Description: "分類結果が見つからない"},
-		{Code: 3, Name: "FILE_NOT_FOUND", Description: "--input で指定した入力ファイルが見つからない"},
+		{Code: 3, Name: "FILE_NOT_FOUND", Description: "指定された入力または出力ファイルが見つからない"},
 		{Code: 4, Name: "RUNTIME_ERROR", Description: "その他の実行時エラー"},
 		{Code: 5, Name: "RULE_DEFINITION_ERROR", Description: "ルール定義が不正"},
 	}

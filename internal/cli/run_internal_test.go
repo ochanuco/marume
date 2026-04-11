@@ -164,9 +164,12 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 
 	for _, command := range result.Commands {
 		if command.Name != "classify" && command.Name != "classify-batch" && command.Name != "explain" && command.Name != "version" {
-			continue
+			if command.Name != "capabilities" && command.Name != "schema" {
+				continue
+			}
 		}
 		foundRulesFlag := false
+		foundBoolDefault := false
 		for _, flag := range command.Flags {
 			if flag.Name == "--rules" {
 				foundRulesFlag = true
@@ -174,9 +177,19 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 					t.Fatalf("%s の --rules default は %q を期待しましたが、実際は %q でした", command.Name, expected, flag.Default)
 				}
 			}
+			if (command.Name == "capabilities" && flag.Name == "--json-errors") || (command.Name == "schema" && flag.Name == "--list") {
+				foundBoolDefault = true
+				defaultValue, ok := flag.Default.(bool)
+				if !ok || defaultValue {
+					t.Fatalf("%s の %s default は false を期待しましたが、実際は %#v でした", command.Name, flag.Name, flag.Default)
+				}
+			}
 		}
-		if !foundRulesFlag {
+		if (command.Name == "classify" || command.Name == "classify-batch" || command.Name == "explain" || command.Name == "version") && !foundRulesFlag {
 			t.Fatalf("%s に --rules フラグがありません", command.Name)
+		}
+		if (command.Name == "capabilities" || command.Name == "schema") && !foundBoolDefault {
+			t.Fatalf("%s の bool default を検証できませんでした", command.Name)
 		}
 	}
 }

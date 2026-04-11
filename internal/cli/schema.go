@@ -259,18 +259,7 @@ var capabilitiesResultSchema = schemaDoc{
 			Type:        "array",
 			Required:    true,
 			Description: "グローバルフラグ一覧です。",
-			ItemSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"name":        map[string]any{"type": "string"},
-					"type":        map[string]any{"type": "string"},
-					"description": map[string]any{"type": "string"},
-					"required":    map[string]any{"type": "boolean"},
-					"default":     map[string]any{"type": "string"},
-				},
-				"required":             []string{"description", "name", "type"},
-				"additionalProperties": false,
-			},
+			ItemSchema:  capabilityFlagSchema(),
 		},
 		{
 			Name:        "commands",
@@ -307,7 +296,7 @@ var capabilitiesResultSchema = schemaDoc{
 		"cli_version":       "dev",
 		"default_rule_path": "rules/rules-2026.sqlite",
 		"global_flags": []map[string]any{
-			{"name": "--json-errors", "type": "bool", "description": "失敗時に構造化エラーJSONを標準エラーへ出します"},
+			{"name": "--json-errors", "type": "bool", "description": "失敗時に構造化エラーJSONを標準エラーへ出します", "default": false},
 		},
 		"commands": []map[string]any{
 			{"name": "classify", "summary": "単一症例を分類します", "input_schema": "case-input", "output_schema": "classify-result"},
@@ -353,18 +342,7 @@ func intPtr(v int) *int {
 }
 
 func capabilityCommandSchema(depth int) map[string]any {
-	flagSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"name":        map[string]any{"type": "string"},
-			"type":        map[string]any{"type": "string"},
-			"description": map[string]any{"type": "string"},
-			"required":    map[string]any{"type": "boolean"},
-			"default":     map[string]any{"type": "string"},
-		},
-		"required":             []string{"description", "name", "type"},
-		"additionalProperties": false,
-	}
+	flagSchema := capabilityFlagSchema()
 	argSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -406,4 +384,27 @@ func capabilityCommandSchema(depth int) map[string]any {
 		}
 	}
 	return commandSchema
+}
+
+func capabilityFlagSchema() map[string]any {
+	defaultSchema := map[string]any{
+		"anyOf": []map[string]any{
+			{"type": "string"},
+			{"type": "boolean"},
+			{"type": "integer"},
+			{"type": "number"},
+		},
+	}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":        map[string]any{"type": "string"},
+			"type":        map[string]any{"type": "string"},
+			"description": map[string]any{"type": "string"},
+			"required":    map[string]any{"type": "boolean"},
+			"default":     defaultSchema,
+		},
+		"required":             []string{"description", "name", "type"},
+		"additionalProperties": false,
+	}
 }
