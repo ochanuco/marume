@@ -202,6 +202,21 @@ var batchResultSchema = schemaDoc{
 	},
 }
 
+var validateResultSchema = schemaDoc{
+	Name:        "validate-result",
+	Title:       "Validate Result",
+	Description: "validate のJSON出力です。",
+	Type:        "object",
+	Fields: []schemaField{
+		{Name: "status", Type: "string", Required: true, Description: "検証結果です。現在は ok のみ返します。"},
+		{Name: "case_id", Type: "string", Required: true, Description: "入力症例IDです。"},
+	},
+	Example: map[string]any{
+		"status":  "ok",
+		"case_id": "123",
+	},
+}
+
 var versionResultSchema = schemaDoc{
 	Name:        "version-result",
 	Title:       "Version Result",
@@ -221,12 +236,44 @@ var versionResultSchema = schemaDoc{
 	},
 }
 
+var capabilitiesResultSchema = schemaDoc{
+	Name:        "capabilities-result",
+	Title:       "Capabilities Result",
+	Description: "capabilities のJSON出力です。",
+	Type:        "object",
+	Fields: []schemaField{
+		{Name: "cli_version", Type: "string", Required: true, Description: "CLIバージョンです。"},
+		{Name: "default_rule_path", Type: "string", Required: true, Description: "rules 未指定時に参照するデフォルトの snapshot パスです。"},
+		{Name: "global_flags", Type: "array", ItemsType: "object", Required: true, Description: "グローバルフラグ一覧です。"},
+		{Name: "commands", Type: "array", ItemsType: "object", Required: true, Description: "コマンド一覧と入出力契約です。"},
+		{Name: "schemas", Type: "array", ItemsType: "string", Required: true, Description: "利用可能なスキーマ名一覧です。"},
+		{Name: "exit_codes", Type: "array", ItemsType: "object", Required: true, Description: "終了コード一覧です。"},
+	},
+	Example: map[string]any{
+		"cli_version":       "dev",
+		"default_rule_path": "rules/rules-2026.sqlite",
+		"global_flags": []map[string]any{
+			{"name": "--json-errors", "type": "bool", "description": "失敗時に構造化エラーJSONを標準エラーへ出します"},
+		},
+		"commands": []map[string]any{
+			{"name": "classify", "input_schema": "case-input", "output_schema": "classify-result"},
+		},
+		"schemas": []string{"case-input", "classify-result"},
+		"exit_codes": []map[string]any{
+			{"code": 0, "name": "OK"},
+			{"code": 1, "name": "INVALID_INPUT"},
+		},
+	},
+}
+
 var schemaRegistry = map[string]schemaDoc{
-	caseInputSchema.Name:      caseInputSchema,
-	classifyResultSchema.Name: classifyResultSchema,
-	explainResultSchema.Name:  explainResultSchema,
-	batchResultSchema.Name:    batchResultSchema,
-	versionResultSchema.Name:  versionResultSchema,
+	caseInputSchema.Name:          caseInputSchema,
+	classifyResultSchema.Name:     classifyResultSchema,
+	explainResultSchema.Name:      explainResultSchema,
+	batchResultSchema.Name:        batchResultSchema,
+	validateResultSchema.Name:     validateResultSchema,
+	versionResultSchema.Name:      versionResultSchema,
+	capabilitiesResultSchema.Name: capabilitiesResultSchema,
 }
 
 func writeSchemaHelp(w io.Writer, doc schemaDoc) {

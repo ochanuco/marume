@@ -303,6 +303,57 @@ func TestSchemaListは利用可能なスキーマ名を返す(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"capabilities"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("capabilities でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("capabilities のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	if result["default_rule_path"] != "rules/rules-2026.sqlite" {
+		t.Fatalf("default_rule_path が想定と異なります: %v", result["default_rule_path"])
+	}
+	commands, ok := result["commands"].([]any)
+	if !ok || len(commands) == 0 {
+		t.Fatalf("commands を期待しましたが、実際は %v でした", result["commands"])
+	}
+	foundCapabilities := false
+	for _, item := range commands {
+		command, ok := item.(map[string]any)
+		if ok && command["name"] == "capabilities" {
+			foundCapabilities = true
+			break
+		}
+	}
+	if !foundCapabilities {
+		t.Fatalf("capabilities コマンド自身が一覧にありません: %v", commands)
+	}
+
+	for _, item := range commands {
+		command, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if command["name"] == "schema" {
+			if _, exists := command["output_schema"]; exists {
+				t.Fatalf("schema コマンドは取得不能な output_schema を広告しない想定でした: %v", command)
+			}
+		}
+	}
+}
+
 func TestSchemaListは余分な引数を拒否する(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -346,6 +397,52 @@ func TestClassifyHelpは入力スキーマの要約を表示する(t *testing.T)
 	}
 	if !strings.Contains(helpText, "marume schema classify-result") {
 		t.Fatalf("classify --help に出力スキーマ導線がありません: %s", helpText)
+	}
+}
+
+func TestTopLevelHelpはCapabilitiesとJSONErrorsを案内する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("--help でエラーが返りました: %v", err)
+	}
+
+	helpText := stdout.String()
+	if !strings.Contains(helpText, "capabilities") {
+		t.Fatalf("top-level help に capabilities がありません: %s", helpText)
+	}
+	if !strings.Contains(helpText, "--json-errors") {
+		t.Fatalf("top-level help に --json-errors がありません: %s", helpText)
+	}
+}
+
+func TestRunはJSONErrors単独でもpanicせず入力エラーを返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("--json-errors 単独では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("--json-errors 単独の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(stderr.String(), "使い方:") {
+		t.Fatalf("--json-errors 単独でも usage を表示する想定でした: %s", stderr.String())
 	}
 }
 

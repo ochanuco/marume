@@ -16,11 +16,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := cli.Run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+	args := os.Args[1:]
+	if err := cli.Run(ctx, args, os.Stdin, os.Stdout, os.Stderr); err != nil {
 		if errors.Is(err, context.Canceled) {
 			os.Exit(0)
 		}
-		fmt.Fprintln(os.Stderr, err)
+		if cli.JSONErrorsEnabled(args) {
+			if writeErr := cli.WriteErrorJSON(os.Stderr, err); writeErr != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(cli.ExitCode(err))
 	}
 }
