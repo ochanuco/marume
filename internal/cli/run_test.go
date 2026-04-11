@@ -322,8 +322,9 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
 		t.Fatalf("capabilities のJSON出力を読み取れませんでした: %v", decodeErr)
 	}
-	if result["default_rule_path"] != "rules/rules-2026.sqlite" {
-		t.Fatalf("default_rule_path が想定と異なります: %v", result["default_rule_path"])
+	defaultRulePath, ok := result["default_rule_path"].(string)
+	if !ok || defaultRulePath == "" {
+		t.Fatalf("default_rule_path が空です: %v", result["default_rule_path"])
 	}
 	commands, ok := result["commands"].([]any)
 	if !ok || len(commands) == 0 {
@@ -351,6 +352,25 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 				t.Fatalf("schema コマンドは取得不能な output_schema を広告しない想定でした: %v", command)
 			}
 		}
+	}
+}
+
+func TestCapabilitiesは余分な引数を拒否する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"capabilities", "extra"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("capabilities extra は入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("capabilities extra の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
 	}
 }
 
@@ -443,6 +463,26 @@ func TestRunはJSONErrors単独でもpanicせず入力エラーを返す(t *test
 	}
 	if !strings.Contains(stderr.String(), "使い方:") {
 		t.Fatalf("--json-errors 単独でも usage を表示する想定でした: %s", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時に人向けstderrを抑止する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err == nil {
+		t.Fatal("JSON mode では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("JSON mode では stderr を空にする想定でした: %q", stderr.String())
 	}
 }
 

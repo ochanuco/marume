@@ -17,11 +17,12 @@ func main() {
 	defer stop()
 
 	args := os.Args[1:]
-	if err := cli.Run(ctx, args, os.Stdin, os.Stdout, os.Stderr); err != nil {
+	jsonErrors := cli.JSONErrorsEnabled(args)
+	if err := cli.Run(ctx, args, os.Stdin, os.Stdout, os.Stderr, jsonErrors); err != nil {
 		if errors.Is(err, context.Canceled) {
 			os.Exit(0)
 		}
-		if cli.JSONErrorsEnabled(args) {
+		if jsonErrors {
 			if writeErr := cli.WriteErrorJSON(os.Stderr, err); writeErr != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}

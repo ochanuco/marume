@@ -91,4 +91,61 @@ func TestJSONErrorsEnabledはグローバルフラグを検出する(t *testing.
 	if JSONErrorsEnabled([]string{"classify", "--input", "-"}) {
 		t.Fatal("JSONErrorsEnabled はフラグなしで false を返す想定でした")
 	}
+	if JSONErrorsEnabled([]string{"classify", "--input", "--json-errors"}) {
+		t.Fatal("JSONErrorsEnabled はサブコマンド以降の値をグローバルフラグとして扱わない想定でした")
+	}
+}
+
+func TestStripGlobalFlagsは先頭のグローバルフラグだけを取り除く(t *testing.T) {
+	args := stripGlobalFlags([]string{"--json-errors", "classify", "--input", "--json-errors"})
+	expected := []string{"classify", "--input", "--json-errors"}
+	if len(args) != len(expected) {
+		t.Fatalf("stripGlobalFlags の結果長が想定と異なります: %v", args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Fatalf("stripGlobalFlags[%d] は %q を期待しましたが、実際は %q でした", i, expected[i], args[i])
+		}
+	}
+}
+
+func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := runCapabilities(nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("runCapabilities でエラーが返りました: %v", err)
+	}
+
+	var result struct {
+		DefaultRulePath string              `json:"default_rule_path"`
+		Commands        []capabilityCommand `json:"commands"`
+	}
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("capabilities のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+
+	expected := resolvedDefaultRulesPath()
+	if result.DefaultRulePath != expected {
+		t.Fatalf("default_rule_path は %q を期待しましたが、実際は %q でした", expected, result.DefaultRulePath)
+	}
+
+	for _, command := range result.Commands {
+		if command.Name != "classify" && command.Name != "classify-batch" && command.Name != "explain" && command.Name != "version" {
+			continue
+		}
+		foundRulesFlag := false
+		for _, flag := range command.Flags {
+			if flag.Name == "--rules" {
+				foundRulesFlag = true
+				if flag.Default != expected {
+					t.Fatalf("%s の --rules default は %q を期待しましたが、実際は %q でした", command.Name, expected, flag.Default)
+				}
+			}
+		}
+		if !foundRulesFlag {
+			t.Fatalf("%s に --rules フラグがありません", command.Name)
+		}
+	}
 }
