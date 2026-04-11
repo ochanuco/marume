@@ -100,6 +100,9 @@ func TestJSONErrorsEnabledはグローバルフラグを検出する(t *testing.
 	if !JSONErrorsEnabled([]string{"--json-errors", "classify", "--input", "-"}) {
 		t.Fatal("JSONErrorsEnabled は --json-errors を検出する想定でした")
 	}
+	if !JSONErrorsEnabled([]string{"--json-errors"}) {
+		t.Fatal("JSONErrorsEnabled は standalone --json-errors を検出する想定でした")
+	}
 	if !JSONErrorsEnabled([]string{"--json-errors=true", "classify", "--input", "-"}) {
 		t.Fatal("JSONErrorsEnabled は --json-errors=true を検出する想定でした")
 	}
