@@ -331,15 +331,33 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 		t.Fatalf("commands を期待しましたが、実際は %v でした", result["commands"])
 	}
 	foundCapabilities := false
+	requiredCommands := map[string]bool{
+		"classify":       false,
+		"classify-batch": false,
+		"explain":        false,
+		"validate":       false,
+	}
 	for _, item := range commands {
 		command, ok := item.(map[string]any)
-		if ok && command["name"] == "capabilities" {
+		if !ok {
+			continue
+		}
+		if command["name"] == "capabilities" {
 			foundCapabilities = true
-			break
+		}
+		if name, ok := command["name"].(string); ok {
+			if _, exists := requiredCommands[name]; exists {
+				requiredCommands[name] = true
+			}
 		}
 	}
 	if !foundCapabilities {
 		t.Fatalf("capabilities コマンド自身が一覧にありません: %v", commands)
+	}
+	for name, found := range requiredCommands {
+		if !found {
+			t.Fatalf("%s コマンドが一覧にありません: %v", name, commands)
+		}
 	}
 
 	for _, item := range commands {
@@ -373,14 +391,19 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 	if !ok || len(exitCodes) == 0 {
 		t.Fatalf("exit_codes を期待しましたが、実際は %v でした", result["exit_codes"])
 	}
+	foundFileNotFound := false
 	for _, rawExitCode := range exitCodes {
 		doc, ok := rawExitCode.(map[string]any)
 		if !ok || doc["name"] != "FILE_NOT_FOUND" {
 			continue
 		}
+		foundFileNotFound = true
 		if doc["description"] != "--input で指定した入力ファイルが見つからない" {
 			t.Fatalf("FILE_NOT_FOUND の説明が runtime と一致しません: %v", doc["description"])
 		}
+	}
+	if !foundFileNotFound {
+		t.Fatalf("FILE_NOT_FOUND が exit_codes にありません: %v", exitCodes)
 	}
 }
 
@@ -532,6 +555,26 @@ func TestRunはJSONErrors時でもサブコマンドHelpを表示する(t *testi
 	}
 	if !strings.Contains(stderr.String(), "使い方: marume classify") {
 		t.Fatalf("JSON mode でも classify --help を stderr に表示する想定でした: %q", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時でも後続フラグ付きサブコマンドHelpを表示する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors", "classify", "--rules", "rules/custom.sqlite", "--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("JSON mode の classify --rules ... --help でエラーが返りました: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "使い方: marume classify") {
+		t.Fatalf("JSON mode でも classify --rules ... --help を stderr に表示する想定でした: %q", stderr.String())
 	}
 }
 

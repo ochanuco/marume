@@ -31,25 +31,29 @@ const legacyDefaultRulePath = "rules/rules.json"
 var Version = "dev"
 
 // Run dispatches a CLI subcommand and writes user-facing output to the provided streams.
-func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, jsonErrors ...bool) error {
+func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, jsonErrors ...bool) (retErr error) {
 	jsonMode := len(jsonErrors) > 0 && jsonErrors[0]
+	diagnosticStderr := newDiagnosticWriter(stderr, jsonMode)
+	defer func() {
+		if retErr == nil {
+			_ = diagnosticStderr.Flush()
+		}
+	}()
 
 	if len(args) == 0 {
-		printUsage(errorOutput(stderr, jsonMode, false))
+		printUsage(diagnosticStderr)
 		return errInvalidInput
 	}
 
 	args = stripGlobalFlags(args)
 	if len(args) == 0 {
-		printUsage(errorOutput(stderr, jsonMode, false))
+		printUsage(diagnosticStderr)
 		return errInvalidInput
 	}
 	if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
 		printUsage(stdout)
 		return nil
 	}
-
-	diagnosticStderr := errorOutput(stderr, jsonMode, isSubcommandHelp(args[1:]))
 
 	switch args[0] {
 	case "classify":
@@ -74,18 +78,32 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 }
 
-func errorOutput(stderr io.Writer, jsonMode, helpRequested bool) io.Writer {
-	if jsonMode && !helpRequested {
-		return io.Discard
-	}
-	return stderr
+type diagnosticWriter struct {
+	target io.Writer
+	buffer *bytes.Buffer
 }
 
-func isSubcommandHelp(args []string) bool {
-	if len(args) == 0 {
-		return false
+func newDiagnosticWriter(target io.Writer, bufferOutput bool) *diagnosticWriter {
+	writer := &diagnosticWriter{target: target}
+	if bufferOutput {
+		writer.buffer = &bytes.Buffer{}
 	}
-	return args[0] == "--help" || args[0] == "-h"
+	return writer
+}
+
+func (w *diagnosticWriter) Write(p []byte) (int, error) {
+	if w.buffer != nil {
+		return w.buffer.Write(p)
+	}
+	return w.target.Write(p)
+}
+
+func (w *diagnosticWriter) Flush() error {
+	if w.buffer == nil || w.buffer.Len() == 0 {
+		return nil
+	}
+	_, err := w.target.Write(w.buffer.Bytes())
+	return err
 }
 
 // ExitCode maps domain and CLI errors to process exit codes.
@@ -909,7 +927,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			Summary:      "単一症例を分類します",
 			InputSchema:  caseInputSchema.Name,
 			OutputSchema: classifyResultSchema.Name,
-			Examples:     []string{"marume classify --input case.json", "marume classify --rules rules/rules-2026.sqlite --input -"},
+			Examples:     []string{"marume classify --input case.json", fmt.Sprintf("marume classify --rules %s --input -", defaultRulesPath)},
 			Flags: []capabilityFlag{
 				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Default: "-"},
 				{Name: "--rules", Type: "string", Description: "ルールスナップショットのパス", Default: defaultRulesPath},
