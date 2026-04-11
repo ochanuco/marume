@@ -2,32 +2,56 @@
 go = "1.26.1"
 uv = "0.11.2"
 
-[tasks.build]
-description = "Build the marume CLI with workspace-local Go caches"
+[tasks."go:build"]
+description = "workspace-local の Go キャッシュを使って marume CLI をビルド"
 run = "mkdir -p .local/go-build .local/go-mod && GOCACHE=$PWD/.local/go-build GOMODCACHE=$PWD/.local/go-mod go build -o ./marume ./cmd/marume"
 
-[tasks.test]
-description = "Run Go tests with workspace-local Go caches"
+[tasks."go:test"]
+description = "workspace-local の Go キャッシュを使って Go テストを実行"
 run = "mkdir -p .local/go-build .local/go-mod && GOCACHE=$PWD/.local/go-build GOMODCACHE=$PWD/.local/go-mod go test ./..."
 
-[tasks.sample]
-description = "Generate sample case, batch, and minimal rules files"
-depends = ["build"]
+[tasks."dev:setup"]
+description = "開発用ツール導入と Python 依存同期をまとめて実行"
+run = "mise install && uv sync"
+
+[tasks."go:sample"]
+description = "サンプル症例・バッチ入力・最小ルールファイルを生成"
+depends = ["go:build"]
 run = "./marume testdata write --dir .local/marume-sample"
 
-[tasks.coding-cases-extract]
+[tasks."py:data:fetch-mhlw"]
+description = "厚労省 DPC 元データをローカル workspace に取得"
+run = "uv run python scripts/fetch_mhlw.py --url ${MARUME_SOURCE_URL:-https://www.mhlw.go.jp/stf/newpage_67729.html} --output-dir ${MARUME_RAW_DIR:-.local/raw/mhlw_2026}"
+
+[tasks."py:data:extract-dpc-pdf"]
+description = "取得済み manifest から DPC ルール CSV を抽出"
+run = "uv run python scripts/extract_dpc_pdf.py --manifest ${MARUME_MANIFEST_PATH:-.local/raw/mhlw_2026/manifest.json} --output ${MARUME_RULES_CSV_PATH:-.local/raw/mhlw_2026/dpc_rules.csv}"
+
+[tasks."py:data:transform-dpc"]
+description = "取得済み DPC 元データをルール snapshot JSON に変換"
+run = "uv run python scripts/transform_dpc.py --manifest ${MARUME_MANIFEST_PATH:-.local/raw/mhlw_2026/manifest.json} --fiscal-year ${DPC_FISCAL_YEAR:-2026} --output ${MARUME_SNAPSHOT_JSON_PATH:-.local/intermediate/dpc-2026.json}"
+
+[tasks."py:data:build-sqlite"]
+description = "変換済み JSON snapshot から SQLite ルール snapshot を生成"
+run = "uv run python scripts/build_sqlite.py --input ${MARUME_SNAPSHOT_JSON_PATH:-.local/intermediate/dpc-2026.json} --output ${MARUME_SQLITE_PATH:-.local/sqlite/rules-2026.sqlite}"
+
+[tasks."py:data:workflow"]
+description = "設定済み marume データ workflow JSON を実行"
+run = "uv run python scripts/run_workflow.py --workflow ${MARUME_WORKFLOW_PATH:-workflows/dpc_2026_mhlw.json}"
+
+[tasks."py:samples:coding-cases-extract"]
 description = "厚労省公開のコーディングテキスト PDF から DPC コーディング事例を抽出"
 run = "uv run python scripts/extract_dpc_coding_cases.py --url ${DPC_CODING_TEXT_URL:-https://www.mhlw.go.jp/content/12404000/001394024.pdf} --output .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --start-page ${DPC_CODING_TEXT_START_PAGE:-35}"
 
-[tasks.coding-cases-build]
+[tasks."py:samples:coding-cases-build"]
 description = "抽出済み DPC コーディング事例から marume 向け症例候補 JSON を生成"
-depends = ["coding-cases-extract"]
+depends = ["py:samples:coding-cases-extract"]
 run = "uv run python scripts/build_dpc_sample_cases.py --input .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --output .local/dpc-sample-case-candidates-${DPC_CODING_TEXT_VERSION:-v6}.json --case-input-jsonl .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}.jsonl --report .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}-report.json --fiscal-year ${DPC_FISCAL_YEAR:-2026}"
 
-[tasks.coding-cases-generate]
+[tasks."py:samples:coding-cases-generate"]
 description = "既存の DPC コーディング事例 JSON から marume 向け症例候補 JSON を生成"
 run = "uv run python scripts/build_dpc_sample_cases.py --input .local/dpc-coding-cases-${DPC_CODING_TEXT_VERSION:-v6}.json --output .local/dpc-sample-case-candidates-${DPC_CODING_TEXT_VERSION:-v6}.json --case-input-jsonl .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}.jsonl --report .local/dpc-case-input-candidates-${DPC_CODING_TEXT_VERSION:-v6}-report.json --fiscal-year ${DPC_FISCAL_YEAR:-2026}"
 
-[tasks.coding-cases]
+[tasks."py:samples:coding-cases"]
 description = "DPC コーディング事例の抽出から症例候補 JSON 生成までをまとめて実行"
-depends = ["coding-cases-build"]
+depends = ["py:samples:coding-cases-build"]

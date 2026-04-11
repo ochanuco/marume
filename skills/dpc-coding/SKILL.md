@@ -20,7 +20,7 @@ First read `docs/dpc-coding-sample-cases.md` for the current extraction workflow
 If data needs to be generated, use the repository tasks instead of reimplementing extraction logic:
 
 ```sh
-mise run coding-cases
+mise run py:samples:coding-cases
 ```
 
 This produces `.local/dpc-coding-cases-<version>.json` and `.local/dpc-sample-case-candidates-<version>.json`. Files under `.local/` are working data and should not be committed unless the repo explicitly changes that policy.
