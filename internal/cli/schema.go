@@ -24,6 +24,7 @@ type schemaField struct {
 	Required    bool
 	ItemsType   string
 	ItemSchema  map[string]any
+	Const       any
 	MinLength   *int
 	Minimum     *int
 }
@@ -49,6 +50,9 @@ func (d schemaDoc) jsonSchema() map[string]any {
 		}
 		if field.Minimum != nil {
 			property["minimum"] = *field.Minimum
+		}
+		if field.Const != nil {
+			property["const"] = field.Const
 		}
 		properties[field.Name] = property
 		if field.Required {
@@ -214,7 +218,7 @@ var validateResultSchema = schemaDoc{
 	Description: "validate のJSON出力です。",
 	Type:        "object",
 	Fields: []schemaField{
-		{Name: "status", Type: "string", Required: true, Description: "検証結果です。現在は ok のみ返します。"},
+		{Name: "status", Type: "string", Required: true, Const: "ok", Description: "検証結果です。現在は ok のみ返します。"},
 		{Name: "case_id", Type: "string", Required: true, Description: "入力症例IDです。"},
 	},
 	Example: map[string]any{
@@ -273,62 +277,7 @@ var capabilitiesResultSchema = schemaDoc{
 			Type:        "array",
 			Required:    true,
 			Description: "コマンド一覧と入出力契約です。",
-			ItemSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"name":          map[string]any{"type": "string"},
-					"summary":       map[string]any{"type": "string"},
-					"input_schema":  map[string]any{"type": "string"},
-					"output_schema": map[string]any{"type": "string"},
-					"examples": map[string]any{
-						"type":  "array",
-						"items": map[string]any{"type": "string"},
-					},
-					"flags": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"name":        map[string]any{"type": "string"},
-								"type":        map[string]any{"type": "string"},
-								"description": map[string]any{"type": "string"},
-								"required":    map[string]any{"type": "boolean"},
-								"default":     map[string]any{"type": "string"},
-							},
-							"required":             []string{"description", "name", "type"},
-							"additionalProperties": false,
-						},
-					},
-					"positional_args": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"name":        map[string]any{"type": "string"},
-								"type":        map[string]any{"type": "string"},
-								"description": map[string]any{"type": "string"},
-								"required":    map[string]any{"type": "boolean"},
-							},
-							"required":             []string{"description", "name", "type"},
-							"additionalProperties": false,
-						},
-					},
-					"subcommands": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"name":    map[string]any{"type": "string"},
-								"summary": map[string]any{"type": "string"},
-							},
-							"required":             []string{"name", "summary"},
-							"additionalProperties": true,
-						},
-					},
-				},
-				"required":             []string{"name", "summary"},
-				"additionalProperties": false,
-			},
+			ItemSchema:  capabilityCommandSchema(2),
 		},
 		{
 			Name:        "schemas",
@@ -361,24 +310,26 @@ var capabilitiesResultSchema = schemaDoc{
 			{"name": "--json-errors", "type": "bool", "description": "失敗時に構造化エラーJSONを標準エラーへ出します"},
 		},
 		"commands": []map[string]any{
-			{"name": "classify", "input_schema": "case-input", "output_schema": "classify-result"},
+			{"name": "classify", "summary": "単一症例を分類します", "input_schema": "case-input", "output_schema": "classify-result"},
 			{
-				"name": "schema",
+				"name":    "schema",
+				"summary": "JSON Schema を返します",
 				"positional_args": []map[string]any{
-					{"name": "name", "type": "string"},
+					{"name": "name", "type": "string", "description": "返したいスキーマ名。--list を使わない場合に指定する"},
 				},
 			},
 			{
-				"name": "testdata",
+				"name":    "testdata",
+				"summary": "サンプル入力とサンプルルールを生成します",
 				"subcommands": []map[string]any{
-					{"name": "write"},
+					{"name": "write", "summary": "サンプル一式をディレクトリへ書き出します", "examples": []string{"marume testdata write --dir ./.local/marume-sample"}},
 				},
 			},
 		},
 		"schemas": []string{"case-input", "classify-result"},
 		"exit_codes": []map[string]any{
-			{"code": 0, "name": "OK"},
-			{"code": 1, "name": "INVALID_INPUT"},
+			{"code": 0, "name": "OK", "description": "正常終了"},
+			{"code": 1, "name": "INVALID_INPUT", "description": "入力または CLI 引数が不正"},
 		},
 	},
 }
@@ -399,4 +350,60 @@ func writeSchemaHelp(w io.Writer, doc schemaDoc) {
 
 func intPtr(v int) *int {
 	return &v
+}
+
+func capabilityCommandSchema(depth int) map[string]any {
+	flagSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":        map[string]any{"type": "string"},
+			"type":        map[string]any{"type": "string"},
+			"description": map[string]any{"type": "string"},
+			"required":    map[string]any{"type": "boolean"},
+			"default":     map[string]any{"type": "string"},
+		},
+		"required":             []string{"description", "name", "type"},
+		"additionalProperties": false,
+	}
+	argSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":        map[string]any{"type": "string"},
+			"type":        map[string]any{"type": "string"},
+			"description": map[string]any{"type": "string"},
+			"required":    map[string]any{"type": "boolean"},
+		},
+		"required":             []string{"description", "name", "type"},
+		"additionalProperties": false,
+	}
+	commandSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":          map[string]any{"type": "string"},
+			"summary":       map[string]any{"type": "string"},
+			"input_schema":  map[string]any{"type": "string"},
+			"output_schema": map[string]any{"type": "string"},
+			"examples": map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": "string"},
+			},
+			"flags": map[string]any{
+				"type":  "array",
+				"items": flagSchema,
+			},
+			"positional_args": map[string]any{
+				"type":  "array",
+				"items": argSchema,
+			},
+		},
+		"required":             []string{"name", "summary"},
+		"additionalProperties": false,
+	}
+	if depth > 0 {
+		commandSchema["properties"].(map[string]any)["subcommands"] = map[string]any{
+			"type":  "array",
+			"items": capabilityCommandSchema(depth - 1),
+		}
+	}
+	return commandSchema
 }

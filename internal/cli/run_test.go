@@ -357,6 +357,24 @@ func TestSchemaCapabilitiesResultは入れ子のshapeも返す(t *testing.T) {
 	if _, exists := commandProperties["summary"]; !exists {
 		t.Fatalf("commands.items.properties に summary がありません: %v", commandProperties)
 	}
+	subcommandsField, ok := commandProperties["subcommands"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items.properties.subcommands を期待しましたが、実際は %v でした", commandProperties["subcommands"])
+	}
+	subcommandItems, ok := subcommandsField["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("subcommands.items を期待しましたが、実際は %v でした", subcommandsField["items"])
+	}
+	subcommandProperties, ok := subcommandItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("subcommands.items.properties を期待しましたが、実際は %v でした", subcommandItems["properties"])
+	}
+	if _, exists := subcommandProperties["examples"]; !exists {
+		t.Fatalf("subcommands.items.properties に examples がありません: %v", subcommandProperties)
+	}
+	if _, exists := subcommandProperties["flags"]; !exists {
+		t.Fatalf("subcommands.items.properties に flags がありません: %v", subcommandProperties)
+	}
 
 	exitCodes, ok := properties["exit_codes"].(map[string]any)
 	if !ok {
@@ -375,6 +393,56 @@ func TestSchemaCapabilitiesResultは入れ子のshapeも返す(t *testing.T) {
 	}
 	if _, exists := exitCodeProperties["description"]; !exists {
 		t.Fatalf("exit_codes.items.properties に description がありません: %v", exitCodeProperties)
+	}
+
+	example, ok := result["example"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema example を期待しましたが、実際は %v でした", result["example"])
+	}
+	commandsExample, ok := example["commands"].([]any)
+	if !ok || len(commandsExample) == 0 {
+		t.Fatalf("example.commands を期待しましたが、実際は %v でした", example["commands"])
+	}
+	for _, rawCommand := range commandsExample {
+		command, ok := rawCommand.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, exists := command["summary"]; !exists {
+			t.Fatalf("example.commands の summary が欠けています: %v", command)
+		}
+	}
+}
+
+func TestSchemaValidateResultはstatusをokに固定する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"schema", "validate-result"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("schema validate-result でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("schema validate-result のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	properties, ok := result["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties を期待しましたが、実際は %v でした", result["properties"])
+	}
+	status, ok := properties["status"].(map[string]any)
+	if !ok {
+		t.Fatalf("status schema を期待しましたが、実際は %v でした", properties["status"])
+	}
+	if status["const"] != "ok" {
+		t.Fatalf("status.const は ok を期待しましたが、実際は %v でした", status["const"])
 	}
 }
 
