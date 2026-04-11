@@ -257,6 +257,18 @@ var capabilitiesResultSchema = schemaDoc{
 		},
 		"commands": []map[string]any{
 			{"name": "classify", "input_schema": "case-input", "output_schema": "classify-result"},
+			{
+				"name": "schema",
+				"positional_args": []map[string]any{
+					{"name": "name", "type": "string", "required": true},
+				},
+			},
+			{
+				"name": "testdata",
+				"subcommands": []map[string]any{
+					{"name": "write"},
+				},
+			},
 		},
 		"schemas": []string{"case-input", "classify-result"},
 		"exit_codes": []map[string]any{

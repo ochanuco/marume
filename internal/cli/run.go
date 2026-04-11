@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ochanuco/marume/internal/domain"
@@ -533,13 +534,22 @@ type capabilityFlag struct {
 	Default     string `json:"default,omitempty"`
 }
 
+type capabilityArg struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Required    bool   `json:"required,omitempty"`
+}
+
 type capabilityCommand struct {
-	Name         string           `json:"name"`
-	Summary      string           `json:"summary"`
-	InputSchema  string           `json:"input_schema,omitempty"`
-	OutputSchema string           `json:"output_schema,omitempty"`
-	Examples     []string         `json:"examples,omitempty"`
-	Flags        []capabilityFlag `json:"flags,omitempty"`
+	Name           string              `json:"name"`
+	Summary        string              `json:"summary"`
+	InputSchema    string              `json:"input_schema,omitempty"`
+	OutputSchema   string              `json:"output_schema,omitempty"`
+	Examples       []string            `json:"examples,omitempty"`
+	Flags          []capabilityFlag    `json:"flags,omitempty"`
+	PositionalArgs []capabilityArg     `json:"positional_args,omitempty"`
+	Subcommands    []capabilityCommand `json:"subcommands,omitempty"`
 }
 
 type exitCodeDoc struct {
@@ -580,21 +590,21 @@ func loadCaseInput(path string, stdin io.Reader) (domain.CaseInput, error) {
 
 // JSONErrorsEnabled reports whether the caller requested structured stderr errors.
 func JSONErrorsEnabled(args []string) bool {
-	for _, arg := range args {
-		if arg == "--" {
-			return false
-		}
-		if arg == "-" || !strings.HasPrefix(arg, "-") {
-			return false
-		}
-		if arg == "--json-errors" {
-			return true
-		}
-	}
-	return false
+	options, _ := parseLeadingGlobalFlags(args)
+	return options.JSONErrors
 }
 
 func stripGlobalFlags(args []string) []string {
+	_, filtered := parseLeadingGlobalFlags(args)
+	return filtered
+}
+
+type globalOptions struct {
+	JSONErrors bool
+}
+
+func parseLeadingGlobalFlags(args []string) (globalOptions, []string) {
+	options := globalOptions{}
 	filtered := make([]string, 0, len(args))
 	index := 0
 	for ; index < len(args); index++ {
@@ -605,13 +615,31 @@ func stripGlobalFlags(args []string) []string {
 		if arg == "-" || !strings.HasPrefix(arg, "-") {
 			break
 		}
-		if arg == "--json-errors" {
+		if value, handled, valid := parseJSONErrorsFlag(arg); handled {
+			if !valid {
+				break
+			}
+			options.JSONErrors = value
 			continue
 		}
 		filtered = append(filtered, arg)
 	}
 	filtered = append(filtered, args[index:]...)
-	return filtered
+	return options, filtered
+}
+
+func parseJSONErrorsFlag(arg string) (value bool, handled bool, valid bool) {
+	if arg == "--json-errors" {
+		return true, true, true
+	}
+	if !strings.HasPrefix(arg, "--json-errors=") {
+		return false, false, false
+	}
+	value, err := strconv.ParseBool(strings.TrimPrefix(arg, "--json-errors="))
+	if err != nil {
+		return false, true, false
+	}
+	return value, true, true
 }
 
 // openInput returns stdin for "-" or opens the requested file path for reading.
@@ -774,6 +802,9 @@ func classifyBatchError(err error, caseID string) *batchErrorResult {
 }
 
 func cliErrorResult(err error) cliErrorEnvelope {
+	if err == nil {
+		return cliErrorEnvelope{}
+	}
 	errorResult := batchErrorResult{
 		Code:    "INTERNAL_ERROR",
 		Message: err.Error(),
@@ -810,6 +841,9 @@ func cliErrorResult(err error) cliErrorEnvelope {
 
 // WriteErrorJSON writes a structured stderr payload for machine callers.
 func WriteErrorJSON(w io.Writer, err error) error {
+	if err == nil {
+		return nil
+	}
 	return writeJSON(w, cliErrorResult(err))
 }
 
@@ -972,11 +1006,70 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			Flags: []capabilityFlag{
 				{Name: "--list", Type: "bool", Description: "利用可能なスキーマ名を表示する"},
 			},
+			PositionalArgs: []capabilityArg{
+				{Name: "name", Type: "string", Description: "返したいスキーマ名。--list を使わない場合に指定する", Required: true},
+			},
 		},
 		{
 			Name:     "testdata",
 			Summary:  "サンプル入力とサンプルルールを生成します",
 			Examples: []string{"marume testdata write --dir ./.local/marume-sample"},
+			Subcommands: []capabilityCommand{
+				{
+					Name:    "case",
+					Summary: "単一症例のサンプルJSONを生成します",
+					Examples: []string{
+						fmt.Sprintf("marume testdata case --rules %s --preset ok", defaultRulesPath),
+					},
+					Flags: []capabilityFlag{
+						{Name: "--preset", Type: "string", Description: "生成する症例プリセット名", Default: "ok"},
+						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
+						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+					},
+				},
+				{
+					Name:    "batch",
+					Summary: "複数症例のサンプルJSONLを生成します",
+					Examples: []string{
+						fmt.Sprintf("marume testdata batch --rules %s --preset basic --output ./cases.jsonl", defaultRulesPath),
+					},
+					Flags: []capabilityFlag{
+						{Name: "--preset", Type: "string", Description: "生成するバッチプリセット名", Default: "basic"},
+						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
+						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+					},
+				},
+				{
+					Name:    "rules",
+					Summary: "サンプル用の最小ルールセットJSONを生成します",
+					Examples: []string{
+						fmt.Sprintf("marume testdata rules --rules %s --preset minimal --output ./rules.json", defaultRulesPath),
+					},
+					Flags: []capabilityFlag{
+						{Name: "--preset", Type: "string", Description: "生成するルールセットプリセット名", Default: "minimal"},
+						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
+						{Name: "--output", Type: "string", Description: "出力先。標準出力は -", Default: "-"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+					},
+				},
+				{
+					Name:    "write",
+					Summary: "分類デモ用の sample 一式をディレクトリへ書き出します",
+					Examples: []string{
+						fmt.Sprintf("marume testdata write --rules %s --dir ./.local/marume-sample", defaultRulesPath),
+					},
+					Flags: []capabilityFlag{
+						{Name: "--dir", Type: "string", Description: "サンプル一式の出力先ディレクトリ", Default: ".local/marume-sample"},
+						{Name: "--rules", Type: "string", Description: "サンプル生成元のルールスナップショット", Default: defaultRulesPath},
+						{Name: "--case-preset", Type: "string", Description: "case 用プリセット名", Default: "ok"},
+						{Name: "--batch-preset", Type: "string", Description: "batch 用プリセット名", Default: "basic"},
+						{Name: "--rules-preset", Type: "string", Description: "rules 用プリセット名", Default: "minimal"},
+						{Name: "--verbose", Type: "bool", Description: "スキップしたルールを標準エラーに出す"},
+					},
+				},
+			},
 		},
 		{
 			Name:         "validate",

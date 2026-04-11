@@ -84,9 +84,27 @@ func TestWriteErrorJSONは機械可読なエラーを返す(t *testing.T) {
 	}
 }
 
+func TestWriteErrorJSONはnilエラーなら何も出力しない(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := WriteErrorJSON(&stderr, nil)
+	if err != nil {
+		t.Fatalf("WriteErrorJSON(nil) でエラーが返りました: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("WriteErrorJSON(nil) は no-op を期待しましたが、実際は %q が出力されました", stderr.String())
+	}
+}
+
 func TestJSONErrorsEnabledはグローバルフラグを検出する(t *testing.T) {
 	if !JSONErrorsEnabled([]string{"--json-errors", "classify", "--input", "-"}) {
 		t.Fatal("JSONErrorsEnabled は --json-errors を検出する想定でした")
+	}
+	if !JSONErrorsEnabled([]string{"--json-errors=true", "classify", "--input", "-"}) {
+		t.Fatal("JSONErrorsEnabled は --json-errors=true を検出する想定でした")
+	}
+	if JSONErrorsEnabled([]string{"--json-errors=false", "classify", "--input", "-"}) {
+		t.Fatal("JSONErrorsEnabled は --json-errors=false で false を返す想定でした")
 	}
 	if JSONErrorsEnabled([]string{"classify", "--input", "-"}) {
 		t.Fatal("JSONErrorsEnabled はフラグなしで false を返す想定でした")
@@ -99,6 +117,19 @@ func TestJSONErrorsEnabledはグローバルフラグを検出する(t *testing.
 func TestStripGlobalFlagsは先頭のグローバルフラグだけを取り除く(t *testing.T) {
 	args := stripGlobalFlags([]string{"--json-errors", "classify", "--input", "--json-errors"})
 	expected := []string{"classify", "--input", "--json-errors"}
+	if len(args) != len(expected) {
+		t.Fatalf("stripGlobalFlags の結果長が想定と異なります: %v", args)
+	}
+	for i := range expected {
+		if args[i] != expected[i] {
+			t.Fatalf("stripGlobalFlags[%d] は %q を期待しましたが、実際は %q でした", i, expected[i], args[i])
+		}
+	}
+}
+
+func TestStripGlobalFlagsはbool代入形式の先頭グローバルフラグも取り除く(t *testing.T) {
+	args := stripGlobalFlags([]string{"--json-errors=false", "classify", "--input", "-"})
+	expected := []string{"classify", "--input", "-"}
 	if len(args) != len(expected) {
 		t.Fatalf("stripGlobalFlags の結果長が想定と異なります: %v", args)
 	}

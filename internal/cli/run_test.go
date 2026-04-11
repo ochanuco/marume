@@ -384,6 +384,29 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 			if _, exists := command["output_schema"]; exists {
 				t.Fatalf("schema コマンドは取得不能な output_schema を広告しない想定でした: %v", command)
 			}
+			positionalArgs, ok := command["positional_args"].([]any)
+			if !ok || len(positionalArgs) == 0 {
+				t.Fatalf("schema コマンドは positional_args を広告する想定でした: %v", command)
+			}
+		}
+		if command["name"] == "testdata" {
+			subcommands, ok := command["subcommands"].([]any)
+			if !ok || len(subcommands) == 0 {
+				t.Fatalf("testdata コマンドは subcommands を広告する想定でした: %v", command)
+			}
+			foundWrite := false
+			for _, rawSubcommand := range subcommands {
+				subcommand, ok := rawSubcommand.(map[string]any)
+				if !ok {
+					continue
+				}
+				if subcommand["name"] == "write" {
+					foundWrite = true
+				}
+			}
+			if !foundWrite {
+				t.Fatalf("testdata コマンドは write サブコマンドを広告する想定でした: %v", command)
+			}
 		}
 	}
 
