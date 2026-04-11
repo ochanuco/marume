@@ -7,6 +7,7 @@
 - 単票分類: `marume classify`
 - 一括分類: `marume classify-batch`
 - 候補ルールと一致理由の確認: `marume explain`
+- CLI 契約の機械可読表示: `marume capabilities`
 - JSON Schema の表示: `marume schema`
 - 入力の最低限検証: `marume validate`
 - サンプル入力・最小ルールの生成: `marume testdata write`
@@ -65,6 +66,7 @@ mise run go:sample
 ./marume classify --rules .local/marume-sample/rules-minimal.json --input .local/marume-sample/case-ok.json
 ./marume classify-batch --rules .local/marume-sample/rules-minimal.json --input .local/marume-sample/cases-basic.jsonl --output result.jsonl
 ./marume explain --rules .local/marume-sample/rules-minimal.json --input .local/marume-sample/case-ok.json
+./marume capabilities
 ./marume schema case-input
 ./marume validate --input .local/marume-sample/case-ok.json
 ./marume version --rules .local/marume-sample/rules-minimal.json
@@ -72,9 +74,21 @@ mise run go:sample
 
 `--rules` には JSON と SQLite の両形式を渡せます。
 
+AI エージェントなどの機械呼び出しでは、事前に `capabilities` でコマンド契約を取得できます。
+
+```bash
+./marume capabilities
+```
+
+失敗時も JSON で受けたい場合は、グローバル `--json-errors` を使います。
+
+```bash
+./marume --json-errors classify --input bad.json
+```
+
 ## Data Workflow
 
-既定の workflow 設定は [workflows/dpc_2026_mhlw.json](/Users/chanu/ghq/github.com/ochanuco/marume/.worktree/dev-readme-task-cleanup/workflows/dpc_2026_mhlw.json) です。
+既定の workflow 設定は [workflows/dpc_2026_mhlw.json](workflows/dpc_2026_mhlw.json) です。
 
 ```bash
 mise run py:data:workflow
@@ -91,5 +105,5 @@ mise run py:data:build-sqlite
 
 ## More Details
 
-- SQLite 取り込み元とスナップショット方針: [docs/sqlite-data-sourcing.md](/Users/chanu/ghq/github.com/ochanuco/marume/.worktree/dev-readme-task-cleanup/docs/sqlite-data-sourcing.md)
-- DPC コーディング事例の抽出と症例候補生成: [docs/dpc-coding-sample-cases.md](/Users/chanu/ghq/github.com/ochanuco/marume/.worktree/dev-readme-task-cleanup/docs/dpc-coding-sample-cases.md)
+- SQLite 取り込み元とスナップショット方針: [docs/sqlite-data-sourcing.md](docs/sqlite-data-sourcing.md)
+- DPC コーディング事例の抽出と症例候補生成: [docs/dpc-coding-sample-cases.md](docs/dpc-coding-sample-cases.md)

@@ -303,6 +303,380 @@ func TestSchemaListは利用可能なスキーマ名を返す(t *testing.T) {
 	}
 }
 
+func TestSchemaCapabilitiesResultは入れ子のshapeも返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"schema", "capabilities-result"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("schema capabilities-result でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("schema capabilities-result のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	properties, ok := result["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties を期待しましたが、実際は %v でした", result["properties"])
+	}
+	globalFlags, ok := properties["global_flags"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags schema を期待しましたが、実際は %v でした", properties["global_flags"])
+	}
+	globalFlagItems, ok := globalFlags["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items を期待しましたが、実際は %v でした", globalFlags["items"])
+	}
+	globalFlagRequired, ok := globalFlagItems["required"].([]any)
+	if !ok || len(globalFlagRequired) == 0 {
+		t.Fatalf("global_flags.items.required を期待しましたが、実際は %v でした", globalFlagItems["required"])
+	}
+	globalFlagProperties, ok := globalFlagItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items.properties を期待しましたが、実際は %v でした", globalFlagItems["properties"])
+	}
+	globalFlagDefault, ok := globalFlagProperties["default"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items.properties.default を期待しましたが、実際は %v でした", globalFlagProperties["default"])
+	}
+	globalFlagDefaultAnyOf, ok := globalFlagDefault["anyOf"].([]any)
+	if !ok || len(globalFlagDefaultAnyOf) == 0 {
+		t.Fatalf("global_flags.items.properties.default.anyOf を期待しましたが、実際は %v でした", globalFlagDefault["anyOf"])
+	}
+	foundBooleanDefault := false
+	for _, rawVariant := range globalFlagDefaultAnyOf {
+		variant, ok := rawVariant.(map[string]any)
+		if !ok {
+			continue
+		}
+		if variant["type"] == "boolean" {
+			foundBooleanDefault = true
+		}
+	}
+	if !foundBooleanDefault {
+		t.Fatalf("global_flags.items.properties.default は boolean を許容する想定でした: %v", globalFlagDefault)
+	}
+
+	commandsField, ok := properties["commands"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands schema を期待しましたが、実際は %v でした", properties["commands"])
+	}
+	commandItems, ok := commandsField["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items を期待しましたが、実際は %v でした", commandsField["items"])
+	}
+	commandProperties, ok := commandItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items.properties を期待しましたが、実際は %v でした", commandItems["properties"])
+	}
+	if _, exists := commandProperties["name"]; !exists {
+		t.Fatalf("commands.items.properties に name がありません: %v", commandProperties)
+	}
+	if _, exists := commandProperties["summary"]; !exists {
+		t.Fatalf("commands.items.properties に summary がありません: %v", commandProperties)
+	}
+	subcommandsField, ok := commandProperties["subcommands"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items.properties.subcommands を期待しましたが、実際は %v でした", commandProperties["subcommands"])
+	}
+	subcommandItems, ok := subcommandsField["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("subcommands.items を期待しましたが、実際は %v でした", subcommandsField["items"])
+	}
+	subcommandProperties, ok := subcommandItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("subcommands.items.properties を期待しましたが、実際は %v でした", subcommandItems["properties"])
+	}
+	if _, exists := subcommandProperties["examples"]; !exists {
+		t.Fatalf("subcommands.items.properties に examples がありません: %v", subcommandProperties)
+	}
+	if _, exists := subcommandProperties["flags"]; !exists {
+		t.Fatalf("subcommands.items.properties に flags がありません: %v", subcommandProperties)
+	}
+
+	exitCodes, ok := properties["exit_codes"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes schema を期待しましたが、実際は %v でした", properties["exit_codes"])
+	}
+	exitCodeItems, ok := exitCodes["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes.items を期待しましたが、実際は %v でした", exitCodes["items"])
+	}
+	exitCodeProperties, ok := exitCodeItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes.items.properties を期待しましたが、実際は %v でした", exitCodeItems["properties"])
+	}
+	if _, exists := exitCodeProperties["code"]; !exists {
+		t.Fatalf("exit_codes.items.properties に code がありません: %v", exitCodeProperties)
+	}
+	if _, exists := exitCodeProperties["description"]; !exists {
+		t.Fatalf("exit_codes.items.properties に description がありません: %v", exitCodeProperties)
+	}
+
+	example, ok := result["example"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema example を期待しましたが、実際は %v でした", result["example"])
+	}
+	commandsExample, ok := example["commands"].([]any)
+	if !ok || len(commandsExample) == 0 {
+		t.Fatalf("example.commands を期待しましたが、実際は %v でした", example["commands"])
+	}
+	for _, rawCommand := range commandsExample {
+		command, ok := rawCommand.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, exists := command["summary"]; !exists {
+			t.Fatalf("example.commands の summary が欠けています: %v", command)
+		}
+	}
+}
+
+func TestSchemaValidateResultはstatusをokに固定する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"schema", "validate-result"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("schema validate-result でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("schema validate-result のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	properties, ok := result["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties を期待しましたが、実際は %v でした", result["properties"])
+	}
+	status, ok := properties["status"].(map[string]any)
+	if !ok {
+		t.Fatalf("status schema を期待しましたが、実際は %v でした", properties["status"])
+	}
+	if status["const"] != "ok" {
+		t.Fatalf("status.const は ok を期待しましたが、実際は %v でした", status["const"])
+	}
+}
+
+func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"capabilities"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("capabilities でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("capabilities のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	defaultRulePath, ok := result["default_rule_path"].(string)
+	if !ok || defaultRulePath == "" {
+		t.Fatalf("default_rule_path が空です: %v", result["default_rule_path"])
+	}
+	commands, ok := result["commands"].([]any)
+	if !ok || len(commands) == 0 {
+		t.Fatalf("commands を期待しましたが、実際は %v でした", result["commands"])
+	}
+	foundCapabilities := false
+	requiredCommands := map[string]bool{
+		"classify":       false,
+		"classify-batch": false,
+		"explain":        false,
+		"validate":       false,
+	}
+	for _, item := range commands {
+		command, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if command["name"] == "capabilities" {
+			foundCapabilities = true
+		}
+		if name, ok := command["name"].(string); ok {
+			if _, exists := requiredCommands[name]; exists {
+				requiredCommands[name] = true
+			}
+		}
+	}
+	if !foundCapabilities {
+		t.Fatalf("capabilities コマンド自身が一覧にありません: %v", commands)
+	}
+	for name, found := range requiredCommands {
+		if !found {
+			t.Fatalf("%s コマンドが一覧にありません: %v", name, commands)
+		}
+	}
+	globalFlags, ok := result["global_flags"].([]any)
+	if !ok {
+		t.Fatalf("global_flags を期待しましたが、実際は %v でした", result["global_flags"])
+	}
+	if len(globalFlags) == 0 {
+		t.Fatal("global_flags が空でした")
+	}
+	foundJSONErrors := false
+	for _, rawFlag := range globalFlags {
+		flag, ok := rawFlag.(map[string]any)
+		if !ok {
+			continue
+		}
+		if flag["name"] == "--json-errors" {
+			foundJSONErrors = true
+			if flag["default"] != false {
+				t.Fatalf("--json-errors の default は false を期待しましたが、実際は %v でした", flag["default"])
+			}
+		}
+	}
+	if !foundJSONErrors {
+		t.Fatalf("--json-errors が global_flags にありません: %v", globalFlags)
+	}
+	schemas, ok := result["schemas"].([]any)
+	if !ok {
+		t.Fatalf("schemas を期待しましたが、実際は %v でした", result["schemas"])
+	}
+	if len(schemas) == 0 {
+		t.Fatal("schemas が空でした")
+	}
+	requiredSchemas := map[string]bool{
+		"capabilities-result": false,
+		"validate-result":     false,
+	}
+	for _, rawSchema := range schemas {
+		name, ok := rawSchema.(string)
+		if !ok {
+			t.Fatalf("schemas の要素は string を期待しましたが、実際は %T でした", rawSchema)
+		}
+		if _, exists := requiredSchemas[name]; exists {
+			requiredSchemas[name] = true
+		}
+	}
+	for name, found := range requiredSchemas {
+		if !found {
+			t.Fatalf("%s が schemas にありません: %v", name, schemas)
+		}
+	}
+
+	for _, item := range commands {
+		command, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if command["name"] == "classify" || command["name"] == "classify-batch" || command["name"] == "explain" || command["name"] == "validate" {
+			flags, ok := command["flags"].([]any)
+			if !ok {
+				t.Fatalf("%v の flags を期待しましたが、実際は %v でした", command["name"], command["flags"])
+			}
+			foundInput := false
+			for _, rawFlag := range flags {
+				flag, ok := rawFlag.(map[string]any)
+				if !ok || flag["name"] != "--input" {
+					continue
+				}
+				foundInput = true
+				if required, exists := flag["required"]; exists && required == true {
+					t.Fatalf("%v の --input は capabilities 上で必須扱いしない想定でした: %v", command["name"], flag)
+				}
+			}
+			if !foundInput {
+				t.Fatalf("%v に --input フラグがありません: %v", command["name"], flags)
+			}
+		}
+		if command["name"] == "schema" {
+			if _, exists := command["output_schema"]; exists {
+				t.Fatalf("schema コマンドは取得不能な output_schema を広告しない想定でした: %v", command)
+			}
+			positionalArgs, ok := command["positional_args"].([]any)
+			if !ok || len(positionalArgs) == 0 {
+				t.Fatalf("schema コマンドは positional_args を広告する想定でした: %v", command)
+			}
+			schemaArg, ok := positionalArgs[0].(map[string]any)
+			if !ok {
+				t.Fatalf("schema コマンドの positional_args[0] は object を期待しましたが、実際は %T でした", positionalArgs[0])
+			}
+			if required, exists := schemaArg["required"]; exists && required == true {
+				t.Fatalf("schema コマンドの name positional arg は --list と両立するため必須扱いしない想定でした: %v", schemaArg)
+			}
+		}
+		if command["name"] == "testdata" {
+			subcommands, ok := command["subcommands"].([]any)
+			if !ok || len(subcommands) == 0 {
+				t.Fatalf("testdata コマンドは subcommands を広告する想定でした: %v", command)
+			}
+			foundWrite := false
+			for _, rawSubcommand := range subcommands {
+				subcommand, ok := rawSubcommand.(map[string]any)
+				if !ok {
+					continue
+				}
+				if subcommand["name"] == "write" {
+					foundWrite = true
+				}
+			}
+			if !foundWrite {
+				t.Fatalf("testdata コマンドは write サブコマンドを広告する想定でした: %v", command)
+			}
+		}
+	}
+
+	exitCodes, ok := result["exit_codes"].([]any)
+	if !ok || len(exitCodes) == 0 {
+		t.Fatalf("exit_codes を期待しましたが、実際は %v でした", result["exit_codes"])
+	}
+	foundFileNotFound := false
+	for _, rawExitCode := range exitCodes {
+		doc, ok := rawExitCode.(map[string]any)
+		if !ok || doc["name"] != "FILE_NOT_FOUND" {
+			continue
+		}
+		foundFileNotFound = true
+		if doc["description"] != "指定された入力または出力ファイルが見つからない" {
+			t.Fatalf("FILE_NOT_FOUND の説明が runtime と一致しません: %v", doc["description"])
+		}
+	}
+	if !foundFileNotFound {
+		t.Fatalf("FILE_NOT_FOUND が exit_codes にありません: %v", exitCodes)
+	}
+}
+
+func TestCapabilitiesは余分な引数を拒否する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"capabilities", "extra"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("capabilities extra は入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("capabilities extra の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+}
+
 func TestSchemaListは余分な引数を拒否する(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -346,6 +720,112 @@ func TestClassifyHelpは入力スキーマの要約を表示する(t *testing.T)
 	}
 	if !strings.Contains(helpText, "marume schema classify-result") {
 		t.Fatalf("classify --help に出力スキーマ導線がありません: %s", helpText)
+	}
+}
+
+func TestTopLevelHelpはCapabilitiesとJSONErrorsを案内する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("--help でエラーが返りました: %v", err)
+	}
+
+	helpText := stdout.String()
+	if !strings.Contains(helpText, "capabilities") {
+		t.Fatalf("top-level help に capabilities がありません: %s", helpText)
+	}
+	if !strings.Contains(helpText, "--json-errors") {
+		t.Fatalf("top-level help に --json-errors がありません: %s", helpText)
+	}
+}
+
+func TestRunはJSONErrors単独でもpanicせず入力エラーを返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("--json-errors 単独では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("--json-errors 単独の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(stderr.String(), "使い方:") {
+		t.Fatalf("--json-errors 単独でも usage を表示する想定でした: %s", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時に人向けstderrを抑止する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err == nil {
+		t.Fatal("JSON mode では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("JSON mode では stderr を空にする想定でした: %q", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時でもサブコマンドHelpを表示する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors", "classify", "--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("JSON mode の classify --help でエラーが返りました: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "使い方: marume classify") {
+		t.Fatalf("JSON mode でも classify --help を stderr に表示する想定でした: %q", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時でも後続フラグ付きサブコマンドHelpを表示する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors", "classify", "--rules", "rules/custom.sqlite", "--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("JSON mode の classify --rules ... --help でエラーが返りました: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "使い方: marume classify") {
+		t.Fatalf("JSON mode でも classify --rules ... --help を stderr に表示する想定でした: %q", stderr.String())
 	}
 }
 
