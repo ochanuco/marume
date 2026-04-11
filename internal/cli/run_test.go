@@ -347,10 +347,39 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 		if !ok {
 			continue
 		}
+		if command["name"] == "classify" || command["name"] == "classify-batch" || command["name"] == "explain" || command["name"] == "validate" {
+			flags, ok := command["flags"].([]any)
+			if !ok {
+				t.Fatalf("%v の flags を期待しましたが、実際は %v でした", command["name"], command["flags"])
+			}
+			for _, rawFlag := range flags {
+				flag, ok := rawFlag.(map[string]any)
+				if !ok || flag["name"] != "--input" {
+					continue
+				}
+				if required, exists := flag["required"]; exists && required == true {
+					t.Fatalf("%v の --input は capabilities 上で必須扱いしない想定でした: %v", command["name"], flag)
+				}
+			}
+		}
 		if command["name"] == "schema" {
 			if _, exists := command["output_schema"]; exists {
 				t.Fatalf("schema コマンドは取得不能な output_schema を広告しない想定でした: %v", command)
 			}
+		}
+	}
+
+	exitCodes, ok := result["exit_codes"].([]any)
+	if !ok || len(exitCodes) == 0 {
+		t.Fatalf("exit_codes を期待しましたが、実際は %v でした", result["exit_codes"])
+	}
+	for _, rawExitCode := range exitCodes {
+		doc, ok := rawExitCode.(map[string]any)
+		if !ok || doc["name"] != "FILE_NOT_FOUND" {
+			continue
+		}
+		if doc["description"] != "入力ファイルが見つからない" {
+			t.Fatalf("FILE_NOT_FOUND の説明が runtime と一致しません: %v", doc["description"])
 		}
 	}
 }
@@ -483,6 +512,26 @@ func TestRunはJSONErrors時に人向けstderrを抑止する(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("JSON mode では stderr を空にする想定でした: %q", stderr.String())
+	}
+}
+
+func TestRunはJSONErrors時でもサブコマンドHelpを表示する(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"--json-errors", "classify", "--help"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		true,
+	)
+	if err != nil {
+		t.Fatalf("JSON mode の classify --help でエラーが返りました: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "使い方: marume classify") {
+		t.Fatalf("JSON mode でも classify --help を stderr に表示する想定でした: %q", stderr.String())
 	}
 }
 

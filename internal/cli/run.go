@@ -32,26 +32,24 @@ var Version = "dev"
 
 // Run dispatches a CLI subcommand and writes user-facing output to the provided streams.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, jsonErrors ...bool) error {
-	diagnosticStderr := stderr
 	jsonMode := len(jsonErrors) > 0 && jsonErrors[0]
-	if jsonMode {
-		diagnosticStderr = io.Discard
-	}
 
 	if len(args) == 0 {
-		printUsage(diagnosticStderr)
+		printUsage(errorOutput(stderr, jsonMode, false))
 		return errInvalidInput
 	}
 
 	args = stripGlobalFlags(args)
 	if len(args) == 0 {
-		printUsage(diagnosticStderr)
+		printUsage(errorOutput(stderr, jsonMode, false))
 		return errInvalidInput
 	}
 	if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
 		printUsage(stdout)
 		return nil
 	}
+
+	diagnosticStderr := errorOutput(stderr, jsonMode, isSubcommandHelp(args[1:]))
 
 	switch args[0] {
 	case "classify":
@@ -74,6 +72,20 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		printUsage(diagnosticStderr)
 		return fmt.Errorf("%w: 不明なコマンド %q", errInvalidInput, args[0])
 	}
+}
+
+func errorOutput(stderr io.Writer, jsonMode, helpRequested bool) io.Writer {
+	if jsonMode && !helpRequested {
+		return io.Discard
+	}
+	return stderr
+}
+
+func isSubcommandHelp(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	return args[0] == "--help" || args[0] == "-h"
 }
 
 // ExitCode maps domain and CLI errors to process exit codes.
@@ -899,7 +911,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			OutputSchema: classifyResultSchema.Name,
 			Examples:     []string{"marume classify --input case.json", "marume classify --rules rules/rules-2026.sqlite --input -"},
 			Flags: []capabilityFlag{
-				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Required: true, Default: "-"},
+				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Default: "-"},
 				{Name: "--rules", Type: "string", Description: "ルールスナップショットのパス", Default: defaultRulesPath},
 			},
 		},
@@ -910,7 +922,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			OutputSchema: batchResultSchema.Name,
 			Examples:     []string{"marume classify-batch --input cases.jsonl --output results.jsonl"},
 			Flags: []capabilityFlag{
-				{Name: "--input", Type: "string", Description: "入力JSONLファイルのパス。標準入力は -", Required: true, Default: "-"},
+				{Name: "--input", Type: "string", Description: "入力JSONLファイルのパス。標準入力は -", Default: "-"},
 				{Name: "--output", Type: "string", Description: "結果JSONLの出力先。標準出力は -", Default: "-"},
 				{Name: "--rules", Type: "string", Description: "ルールスナップショットのパス", Default: defaultRulesPath},
 			},
@@ -922,7 +934,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			OutputSchema: explainResultSchema.Name,
 			Examples:     []string{"marume explain --input case.json"},
 			Flags: []capabilityFlag{
-				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Required: true, Default: "-"},
+				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Default: "-"},
 				{Name: "--rules", Type: "string", Description: "ルールスナップショットのパス", Default: defaultRulesPath},
 			},
 		},
@@ -952,7 +964,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			OutputSchema: validateResultSchema.Name,
 			Examples:     []string{"marume validate --input case.json"},
 			Flags: []capabilityFlag{
-				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Required: true, Default: "-"},
+				{Name: "--input", Type: "string", Description: "入力JSONファイルのパス。標準入力は -", Default: "-"},
 			},
 		},
 		{
@@ -972,7 +984,7 @@ func exitCodeDocs() []exitCodeDoc {
 		{Code: 0, Name: "OK", Description: "正常終了"},
 		{Code: 1, Name: "INVALID_INPUT", Description: "入力値、引数、または年度不一致などの利用エラー"},
 		{Code: 2, Name: "NO_CLASSIFICATION", Description: "分類結果が見つからない"},
-		{Code: 3, Name: "FILE_NOT_FOUND", Description: "入力または rules ファイルが見つからない"},
+		{Code: 3, Name: "FILE_NOT_FOUND", Description: "入力ファイルが見つからない"},
 		{Code: 4, Name: "RUNTIME_ERROR", Description: "その他の実行時エラー"},
 		{Code: 5, Name: "RULE_DEFINITION_ERROR", Description: "ルール定義が不正"},
 	}
