@@ -153,6 +153,7 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 		DefaultRulePath string              `json:"default_rule_path"`
 		GlobalFlags     []capabilityFlag    `json:"global_flags"`
 		Commands        []capabilityCommand `json:"commands"`
+		Schemas         []string            `json:"schemas"`
 	}
 	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
 		t.Fatalf("capabilities のJSON出力を読み取れませんでした: %v", decodeErr)
@@ -176,6 +177,19 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 	}
 	if !foundGlobalJSONErrors {
 		t.Fatal("global_flags に --json-errors がありません")
+	}
+
+	schemaNames := make(map[string]struct{}, len(result.Schemas))
+	for _, schemaName := range result.Schemas {
+		schemaNames[schemaName] = struct{}{}
+	}
+	for _, command := range result.Commands {
+		if command.OutputSchema == "" {
+			continue
+		}
+		if _, ok := schemaNames[command.OutputSchema]; !ok {
+			t.Fatalf("%s の output_schema %q が schemas にありません", command.Name, command.OutputSchema)
+		}
 	}
 
 	commandChecks := []struct {
