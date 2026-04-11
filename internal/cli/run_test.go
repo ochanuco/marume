@@ -378,7 +378,7 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 		if !ok || doc["name"] != "FILE_NOT_FOUND" {
 			continue
 		}
-		if doc["description"] != "入力ファイルが見つからない" {
+		if doc["description"] != "--input で指定した入力ファイルが見つからない" {
 			t.Fatalf("FILE_NOT_FOUND の説明が runtime と一致しません: %v", doc["description"])
 		}
 	}

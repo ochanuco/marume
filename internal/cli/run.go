@@ -984,7 +984,7 @@ func exitCodeDocs() []exitCodeDoc {
 		{Code: 0, Name: "OK", Description: "正常終了"},
 		{Code: 1, Name: "INVALID_INPUT", Description: "入力値、引数、または年度不一致などの利用エラー"},
 		{Code: 2, Name: "NO_CLASSIFICATION", Description: "分類結果が見つからない"},
-		{Code: 3, Name: "FILE_NOT_FOUND", Description: "入力ファイルが見つからない"},
+		{Code: 3, Name: "FILE_NOT_FOUND", Description: "--input で指定した入力ファイルが見つからない"},
 		{Code: 4, Name: "RUNTIME_ERROR", Description: "その他の実行時エラー"},
 		{Code: 5, Name: "RULE_DEFINITION_ERROR", Description: "ルール定義が不正"},
 	}
