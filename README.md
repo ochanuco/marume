@@ -74,7 +74,7 @@ mise run go:sample
 
 `--rules` には JSON と SQLite の両形式を渡せます。
 
-AI エージェントなどの機械呼び出しでは、事前に `capabilities` でコマンド契約を取得できます。
+AI エージェントなどの機械呼び出しでは、事前に `capabilities` で機能一覧を取得できます。
 
 ```bash
 ./marume capabilities
