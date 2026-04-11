@@ -178,12 +178,30 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 		t.Fatal("global_flags に --json-errors がありません")
 	}
 
-	for _, command := range result.Commands {
-		if command.Name != "classify" && command.Name != "classify-batch" && command.Name != "explain" && command.Name != "version" {
-			if command.Name != "schema" {
-				continue
+	commandChecks := []struct {
+		name           string
+		expectRules    bool
+		expectBoolFlag string
+	}{
+		{name: "classify", expectRules: true},
+		{name: "classify-batch", expectRules: true},
+		{name: "explain", expectRules: true},
+		{name: "version", expectRules: true},
+		{name: "schema", expectBoolFlag: "--list"},
+	}
+
+	for _, check := range commandChecks {
+		var command *capabilityCommand
+		for i := range result.Commands {
+			if result.Commands[i].Name == check.name {
+				command = &result.Commands[i]
+				break
 			}
 		}
+		if command == nil {
+			t.Fatalf("%s が capabilities にありません", check.name)
+		}
+
 		foundRulesFlag := false
 		foundBoolDefault := false
 		for _, flag := range command.Flags {
@@ -193,7 +211,7 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 					t.Fatalf("%s の --rules default は %q を期待しましたが、実際は %q でした", command.Name, expected, flag.Default)
 				}
 			}
-			if command.Name == "schema" && flag.Name == "--list" {
+			if check.expectBoolFlag != "" && flag.Name == check.expectBoolFlag {
 				foundBoolDefault = true
 				defaultValue, ok := flag.Default.(bool)
 				if !ok || defaultValue {
@@ -201,10 +219,10 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 				}
 			}
 		}
-		if (command.Name == "classify" || command.Name == "classify-batch" || command.Name == "explain" || command.Name == "version") && !foundRulesFlag {
+		if check.expectRules && !foundRulesFlag {
 			t.Fatalf("%s に --rules フラグがありません", command.Name)
 		}
-		if command.Name == "schema" && !foundBoolDefault {
+		if check.expectBoolFlag != "" && !foundBoolDefault {
 			t.Fatalf("%s の bool default を検証できませんでした", command.Name)
 		}
 	}
