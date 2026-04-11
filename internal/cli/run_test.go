@@ -550,6 +550,31 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 	if !foundJSONErrors {
 		t.Fatalf("--json-errors が global_flags にありません: %v", globalFlags)
 	}
+	schemas, ok := result["schemas"].([]any)
+	if !ok {
+		t.Fatalf("schemas を期待しましたが、実際は %v でした", result["schemas"])
+	}
+	if len(schemas) == 0 {
+		t.Fatal("schemas が空でした")
+	}
+	requiredSchemas := map[string]bool{
+		"capabilities-result": false,
+		"validate-result":     false,
+	}
+	for _, rawSchema := range schemas {
+		name, ok := rawSchema.(string)
+		if !ok {
+			t.Fatalf("schemas の要素は string を期待しましたが、実際は %T でした", rawSchema)
+		}
+		if _, exists := requiredSchemas[name]; exists {
+			requiredSchemas[name] = true
+		}
+	}
+	for name, found := range requiredSchemas {
+		if !found {
+			t.Fatalf("%s が schemas にありません: %v", name, schemas)
+		}
+	}
 
 	for _, item := range commands {
 		command, ok := item.(map[string]any)

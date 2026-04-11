@@ -151,6 +151,7 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 
 	var result struct {
 		DefaultRulePath string              `json:"default_rule_path"`
+		GlobalFlags     []capabilityFlag    `json:"global_flags"`
 		Commands        []capabilityCommand `json:"commands"`
 	}
 	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
@@ -162,9 +163,24 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 		t.Fatalf("default_rule_path は %q を期待しましたが、実際は %q でした", expected, result.DefaultRulePath)
 	}
 
+	foundGlobalJSONErrors := false
+	for _, flag := range result.GlobalFlags {
+		if flag.Name != "--json-errors" {
+			continue
+		}
+		foundGlobalJSONErrors = true
+		defaultValue, ok := flag.Default.(bool)
+		if !ok || defaultValue {
+			t.Fatalf("global --json-errors default は false を期待しましたが、実際は %#v でした", flag.Default)
+		}
+	}
+	if !foundGlobalJSONErrors {
+		t.Fatal("global_flags に --json-errors がありません")
+	}
+
 	for _, command := range result.Commands {
 		if command.Name != "classify" && command.Name != "classify-batch" && command.Name != "explain" && command.Name != "version" {
-			if command.Name != "capabilities" && command.Name != "schema" {
+			if command.Name != "schema" {
 				continue
 			}
 		}
@@ -177,7 +193,7 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 					t.Fatalf("%s の --rules default は %q を期待しましたが、実際は %q でした", command.Name, expected, flag.Default)
 				}
 			}
-			if (command.Name == "capabilities" && flag.Name == "--json-errors") || (command.Name == "schema" && flag.Name == "--list") {
+			if command.Name == "schema" && flag.Name == "--list" {
 				foundBoolDefault = true
 				defaultValue, ok := flag.Default.(bool)
 				if !ok || defaultValue {
@@ -188,7 +204,7 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 		if (command.Name == "classify" || command.Name == "classify-batch" || command.Name == "explain" || command.Name == "version") && !foundRulesFlag {
 			t.Fatalf("%s に --rules フラグがありません", command.Name)
 		}
-		if (command.Name == "capabilities" || command.Name == "schema") && !foundBoolDefault {
+		if command.Name == "schema" && !foundBoolDefault {
 			t.Fatalf("%s の bool default を検証できませんでした", command.Name)
 		}
 	}

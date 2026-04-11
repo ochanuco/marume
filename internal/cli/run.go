@@ -999,9 +999,6 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 			Summary:      "CLI のコマンド・フラグ・終了コード・スキーマ一覧を返します",
 			OutputSchema: capabilitiesResultSchema.Name,
 			Examples:     []string{"marume capabilities"},
-			Flags: []capabilityFlag{
-				{Name: "--json-errors", Type: "bool", Description: "失敗時に構造化エラーJSONを標準エラーへ出す", Default: false},
-			},
 		},
 		{
 			Name:     "schema",
