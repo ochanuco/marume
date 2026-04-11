@@ -148,6 +148,9 @@ func TestRunCapabilitiesは実行時と同じ既定rulesパスを広告する(t 
 	if err != nil {
 		t.Fatalf("runCapabilities でエラーが返りました: %v", err)
 	}
+	if stderr.Len() != 0 {
+		t.Fatalf("runCapabilities 成功時に stderr は空を期待しましたが、実際は %q でした", stderr.String())
+	}
 
 	var result struct {
 		DefaultRulePath string              `json:"default_rule_path"`
