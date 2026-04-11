@@ -1,10 +1,12 @@
 # marume
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ochanuco/marume?utm_source=oss&utm_medium=github&utm_campaign=ochanuco%2Fmarume&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 `marume` は、診断群分類（DPC）ルールをローカルで評価する Go 製 CLI です。現在は POC 段階で、JSON ルールセットまたは SQLite スナップショットを読み込み、単票分類・一括分類・説明表示・入力検証を行えます。
 
 ## Current Capabilities
 
-- 単票分類: `marume classify`
+- 一件分類: `marume classify`
 - 一括分類: `marume classify-batch`
 - 候補ルールと一致理由の確認: `marume explain`
 - CLI の機能一覧を JSON で表示: `marume capabilities`
@@ -20,12 +22,6 @@
 ```bash
 mise run dev:setup
 mise run go:build
-```
-
-Python ベースのデータ準備スクリプトを使う場合:
-
-```bash
-uv sync
 ```
 
 ## Available Tasks
