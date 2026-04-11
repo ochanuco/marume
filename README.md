@@ -7,7 +7,7 @@
 - 単票分類: `marume classify`
 - 一括分類: `marume classify-batch`
 - 候補ルールと一致理由の確認: `marume explain`
-- CLI 契約の機械可読表示: `marume capabilities`
+- CLI の機能一覧を JSON で表示: `marume capabilities`
 - JSON Schema の表示: `marume schema`
 - 入力の最低限検証: `marume validate`
 - サンプル入力・最小ルールの生成: `marume testdata write`
