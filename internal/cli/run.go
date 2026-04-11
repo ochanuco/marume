@@ -1007,7 +1007,7 @@ func commandCapabilities(defaultRulesPath string) []capabilityCommand {
 				{Name: "--list", Type: "bool", Description: "利用可能なスキーマ名を表示する"},
 			},
 			PositionalArgs: []capabilityArg{
-				{Name: "name", Type: "string", Description: "返したいスキーマ名。--list を使わない場合に指定する", Required: true},
+				{Name: "name", Type: "string", Description: "返したいスキーマ名。--list を使わない場合に指定する"},
 			},
 		},
 		{

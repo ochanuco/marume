@@ -303,6 +303,81 @@ func TestSchemaListは利用可能なスキーマ名を返す(t *testing.T) {
 	}
 }
 
+func TestSchemaCapabilitiesResultは入れ子のshapeも返す(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"schema", "capabilities-result"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("schema capabilities-result でエラーが返りました: %v", err)
+	}
+
+	var result map[string]any
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatalf("schema capabilities-result のJSON出力を読み取れませんでした: %v", decodeErr)
+	}
+	properties, ok := result["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties を期待しましたが、実際は %v でした", result["properties"])
+	}
+	globalFlags, ok := properties["global_flags"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags schema を期待しましたが、実際は %v でした", properties["global_flags"])
+	}
+	globalFlagItems, ok := globalFlags["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("global_flags.items を期待しましたが、実際は %v でした", globalFlags["items"])
+	}
+	globalFlagRequired, ok := globalFlagItems["required"].([]any)
+	if !ok || len(globalFlagRequired) == 0 {
+		t.Fatalf("global_flags.items.required を期待しましたが、実際は %v でした", globalFlagItems["required"])
+	}
+
+	commandsField, ok := properties["commands"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands schema を期待しましたが、実際は %v でした", properties["commands"])
+	}
+	commandItems, ok := commandsField["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items を期待しましたが、実際は %v でした", commandsField["items"])
+	}
+	commandProperties, ok := commandItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("commands.items.properties を期待しましたが、実際は %v でした", commandItems["properties"])
+	}
+	if _, exists := commandProperties["name"]; !exists {
+		t.Fatalf("commands.items.properties に name がありません: %v", commandProperties)
+	}
+	if _, exists := commandProperties["summary"]; !exists {
+		t.Fatalf("commands.items.properties に summary がありません: %v", commandProperties)
+	}
+
+	exitCodes, ok := properties["exit_codes"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes schema を期待しましたが、実際は %v でした", properties["exit_codes"])
+	}
+	exitCodeItems, ok := exitCodes["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes.items を期待しましたが、実際は %v でした", exitCodes["items"])
+	}
+	exitCodeProperties, ok := exitCodeItems["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("exit_codes.items.properties を期待しましたが、実際は %v でした", exitCodeItems["properties"])
+	}
+	if _, exists := exitCodeProperties["code"]; !exists {
+		t.Fatalf("exit_codes.items.properties に code がありません: %v", exitCodeProperties)
+	}
+	if _, exists := exitCodeProperties["description"]; !exists {
+		t.Fatalf("exit_codes.items.properties に description がありません: %v", exitCodeProperties)
+	}
+}
+
 func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -370,14 +445,19 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 			if !ok {
 				t.Fatalf("%v の flags を期待しましたが、実際は %v でした", command["name"], command["flags"])
 			}
+			foundInput := false
 			for _, rawFlag := range flags {
 				flag, ok := rawFlag.(map[string]any)
 				if !ok || flag["name"] != "--input" {
 					continue
 				}
+				foundInput = true
 				if required, exists := flag["required"]; exists && required == true {
 					t.Fatalf("%v の --input は capabilities 上で必須扱いしない想定でした: %v", command["name"], flag)
 				}
+			}
+			if !foundInput {
+				t.Fatalf("%v に --input フラグがありません: %v", command["name"], flags)
 			}
 		}
 		if command["name"] == "schema" {
@@ -387,6 +467,13 @@ func TestCapabilitiesはCLI契約のJSONを返す(t *testing.T) {
 			positionalArgs, ok := command["positional_args"].([]any)
 			if !ok || len(positionalArgs) == 0 {
 				t.Fatalf("schema コマンドは positional_args を広告する想定でした: %v", command)
+			}
+			schemaArg, ok := positionalArgs[0].(map[string]any)
+			if !ok {
+				t.Fatalf("schema コマンドの positional_args[0] は object を期待しましたが、実際は %T でした", positionalArgs[0])
+			}
+			if required, exists := schemaArg["required"]; exists && required == true {
+				t.Fatalf("schema コマンドの name positional arg は --list と両立するため必須扱いしない想定でした: %v", schemaArg)
 			}
 		}
 		if command["name"] == "testdata" {

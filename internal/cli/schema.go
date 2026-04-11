@@ -23,6 +23,7 @@ type schemaField struct {
 	Description string
 	Required    bool
 	ItemsType   string
+	ItemSchema  map[string]any
 	MinLength   *int
 	Minimum     *int
 }
@@ -35,8 +36,13 @@ func (d schemaDoc) jsonSchema() map[string]any {
 			"type":        field.Type,
 			"description": field.Description,
 		}
-		if field.Type == "array" && field.ItemsType != "" {
-			property["items"] = map[string]any{"type": field.ItemsType}
+		if field.Type == "array" {
+			switch {
+			case field.ItemSchema != nil:
+				property["items"] = field.ItemSchema
+			case field.ItemsType != "":
+				property["items"] = map[string]any{"type": field.ItemsType}
+			}
 		}
 		if field.MinLength != nil {
 			property["minLength"] = *field.MinLength
@@ -244,10 +250,109 @@ var capabilitiesResultSchema = schemaDoc{
 	Fields: []schemaField{
 		{Name: "cli_version", Type: "string", Required: true, Description: "CLIバージョンです。"},
 		{Name: "default_rule_path", Type: "string", Required: true, Description: "rules 未指定時に参照するデフォルトの snapshot パスです。"},
-		{Name: "global_flags", Type: "array", ItemsType: "object", Required: true, Description: "グローバルフラグ一覧です。"},
-		{Name: "commands", Type: "array", ItemsType: "object", Required: true, Description: "コマンド一覧と入出力契約です。"},
-		{Name: "schemas", Type: "array", ItemsType: "string", Required: true, Description: "利用可能なスキーマ名一覧です。"},
-		{Name: "exit_codes", Type: "array", ItemsType: "object", Required: true, Description: "終了コード一覧です。"},
+		{
+			Name:        "global_flags",
+			Type:        "array",
+			Required:    true,
+			Description: "グローバルフラグ一覧です。",
+			ItemSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name":        map[string]any{"type": "string"},
+					"type":        map[string]any{"type": "string"},
+					"description": map[string]any{"type": "string"},
+					"required":    map[string]any{"type": "boolean"},
+					"default":     map[string]any{"type": "string"},
+				},
+				"required":             []string{"description", "name", "type"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			Name:        "commands",
+			Type:        "array",
+			Required:    true,
+			Description: "コマンド一覧と入出力契約です。",
+			ItemSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name":          map[string]any{"type": "string"},
+					"summary":       map[string]any{"type": "string"},
+					"input_schema":  map[string]any{"type": "string"},
+					"output_schema": map[string]any{"type": "string"},
+					"examples": map[string]any{
+						"type":  "array",
+						"items": map[string]any{"type": "string"},
+					},
+					"flags": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"name":        map[string]any{"type": "string"},
+								"type":        map[string]any{"type": "string"},
+								"description": map[string]any{"type": "string"},
+								"required":    map[string]any{"type": "boolean"},
+								"default":     map[string]any{"type": "string"},
+							},
+							"required":             []string{"description", "name", "type"},
+							"additionalProperties": false,
+						},
+					},
+					"positional_args": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"name":        map[string]any{"type": "string"},
+								"type":        map[string]any{"type": "string"},
+								"description": map[string]any{"type": "string"},
+								"required":    map[string]any{"type": "boolean"},
+							},
+							"required":             []string{"description", "name", "type"},
+							"additionalProperties": false,
+						},
+					},
+					"subcommands": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"name":    map[string]any{"type": "string"},
+								"summary": map[string]any{"type": "string"},
+							},
+							"required":             []string{"name", "summary"},
+							"additionalProperties": true,
+						},
+					},
+				},
+				"required":             []string{"name", "summary"},
+				"additionalProperties": false,
+			},
+		},
+		{
+			Name:        "schemas",
+			Type:        "array",
+			Required:    true,
+			Description: "利用可能なスキーマ名一覧です。",
+			ItemSchema:  map[string]any{"type": "string"},
+		},
+		{
+			Name:        "exit_codes",
+			Type:        "array",
+			Required:    true,
+			Description: "終了コード一覧です。",
+			ItemSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"code":        map[string]any{"type": "integer"},
+					"name":        map[string]any{"type": "string"},
+					"description": map[string]any{"type": "string"},
+				},
+				"required":             []string{"code", "description", "name"},
+				"additionalProperties": false,
+			},
+		},
 	},
 	Example: map[string]any{
 		"cli_version":       "dev",
@@ -260,7 +365,7 @@ var capabilitiesResultSchema = schemaDoc{
 			{
 				"name": "schema",
 				"positional_args": []map[string]any{
-					{"name": "name", "type": "string", "required": true},
+					{"name": "name", "type": "string"},
 				},
 			},
 			{
