@@ -103,6 +103,9 @@ func (w *diagnosticWriter) Flush() error {
 		return nil
 	}
 	_, err := w.target.Write(w.buffer.Bytes())
+	if err == nil {
+		w.buffer.Reset()
+	}
 	return err
 }
 
