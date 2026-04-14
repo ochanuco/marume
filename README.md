@@ -6,6 +6,17 @@
 
 アプリケーションとしては、単票・一括の DPC 分類、採用候補ルールと一致理由の説明、症例入力の基本検証、ルールや入出力スキーマの参照、サンプル入力や最小ルールの生成、ルールセット情報の確認ができます。あわせて、厚労省公開データから評価用スナップショットを作るための補助スクリプトと、DPC コーディング事例 PDF からサンプル症例候補を生成するデータ処理も含みます。
 
+## Setup
+
+```bash
+mise run dev:setup
+mise run go:build
+```
+
+## Usage
+
+詳細な CLI の使い方は `./marume --help`、利用できるローカル task の一覧は `mise task ls --local` で確認できます。
+
 ## More Details
 
 - SQLite 取り込み元とスナップショット方針: [docs/sqlite-data-sourcing.md](docs/sqlite-data-sourcing.md)
