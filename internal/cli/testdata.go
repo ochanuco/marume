@@ -70,7 +70,7 @@ func runTestdataCase(ctx context.Context, args []string, stdout, stderr io.Write
 	}
 
 	preset := flags.String("preset", "ok", "生成する症例プリセット名")
-	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
 	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
@@ -116,7 +116,7 @@ func runTestdataBatch(ctx context.Context, args []string, stdout, stderr io.Writ
 	}
 
 	preset := flags.String("preset", "basic", "生成するバッチプリセット名")
-	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (SQLite)")
 	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
 	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
@@ -151,9 +151,9 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	flags := flag.NewFlagSet("testdata rules", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "使い方: marume testdata rules [--preset minimal] [--rules <path>] [--output <path>]")
+		fmt.Fprintln(stderr, "使い方: marume testdata rules [--preset minimal] [--rules <path>] --output <path>")
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "rules snapshot からサンプル用の最小ルールセットJSONを生成します。")
+		fmt.Fprintln(stderr, "rules snapshot からサンプル用の最小ルールセットをSQLiteスナップショットとして生成します。")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintf(stderr, "利用可能な preset: %s\n", joinNames(testdataRulesPresets))
 		fmt.Fprintln(stderr, "")
@@ -162,8 +162,8 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	}
 
 	preset := flags.String("preset", "minimal", "生成するルールセットプリセット名")
-	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
-	outputPath := flags.String("output", "-", "出力先。標準出力に出す場合は -")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (SQLite)")
+	outputPath := flags.String("output", "", "出力先 SQLite ファイルパス (必須)")
 	verbose := flags.Bool("verbose", false, "サンプル生成でスキップしたルールを標準エラーに出す")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -177,6 +177,12 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	if !containsName(testdataRulesPresets, *preset) {
 		return unknownPresetError("rules", *preset, testdataRulesPresets)
 	}
+	if *outputPath == "" {
+		return fmt.Errorf("%w: --output は必須です (SQLite ファイルパスを指定してください)", errInvalidInput)
+	}
+	if err := store.ValidateSQLiteSnapshotPath(*outputPath); err != nil {
+		return fmt.Errorf("%w: --output は SQLite ファイルパスを指定してください: %v", errInvalidInput, err)
+	}
 
 	sourceRuleSet, err := loadTestdataSourceRuleSet(ctx, flags, *rulesPath)
 	if err != nil {
@@ -186,7 +192,10 @@ func runTestdataRules(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return err
 	}
-	return writeJSONToPath(*outputPath, stdout, synthesized.ruleSet)
+	if err := store.WriteSQLiteRuleSet(*outputPath, synthesized.ruleSet); err != nil {
+		return fmt.Errorf("%w: SQLite ルールセットの書き込みに失敗しました: %v", errRuleRuntime, err)
+	}
+	return writeJSON(stdout, map[string]string{"output": *outputPath})
 }
 
 func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -200,14 +209,14 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 		fmt.Fprintln(stderr, "生成物:")
 		fmt.Fprintln(stderr, "  case-ok.json")
 		fmt.Fprintln(stderr, "  cases-basic.jsonl")
-		fmt.Fprintln(stderr, "  rules-minimal.json")
+		fmt.Fprintln(stderr, "  rules-minimal.sqlite")
 		fmt.Fprintln(stderr, "")
 		fmt.Fprintln(stderr, "フラグ:")
 		flags.PrintDefaults()
 	}
 
 	dir := flags.String("dir", ".local/marume-sample", "サンプル一式の出力先ディレクトリ")
-	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (JSON または SQLite)")
+	rulesPath := flags.String("rules", defaultRulePath, "サンプル生成元のルールスナップショット (SQLite)")
 	casePreset := flags.String("case-preset", "ok", "case 用プリセット名")
 	batchPreset := flags.String("batch-preset", "basic", "batch 用プリセット名")
 	rulesPreset := flags.String("rules-preset", "minimal", "rules 用プリセット名")
@@ -257,7 +266,7 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 
 	casePath := filepath.Join(*dir, fmt.Sprintf("case-%s.json", *casePreset))
 	batchPath := filepath.Join(*dir, fmt.Sprintf("cases-%s.jsonl", *batchPreset))
-	rulesOutputPath := filepath.Join(*dir, fmt.Sprintf("rules-%s.json", *rulesPreset))
+	rulesOutputPath := filepath.Join(*dir, fmt.Sprintf("rules-%s.sqlite", *rulesPreset))
 
 	if err := writePrettyJSONFile(casePath, caseValue); err != nil {
 		return err
@@ -265,8 +274,8 @@ func runTestdataWrite(ctx context.Context, args []string, stdout, stderr io.Writ
 	if err := writeJSONLFile(batchPath, batchValue); err != nil {
 		return err
 	}
-	if err := writePrettyJSONFile(rulesOutputPath, synthesized.ruleSet); err != nil {
-		return err
+	if err := store.WriteSQLiteRuleSet(rulesOutputPath, synthesized.ruleSet); err != nil {
+		return fmt.Errorf("%w: SQLite ルールセットの書き込みに失敗しました: %v", errRuleRuntime, err)
 	}
 
 	return writeJSON(stdout, map[string]any{
@@ -566,7 +575,7 @@ func printTestdataUsage(w io.Writer) {
 	fmt.Fprintln(w, "例:")
 	fmt.Fprintln(w, "  marume testdata case --rules rules/rules-2026.sqlite --preset ok")
 	fmt.Fprintln(w, "  marume testdata batch --rules rules/rules-2026.sqlite --preset basic --output ./cases.jsonl")
-	fmt.Fprintln(w, "  marume testdata rules --rules rules/rules-2026.sqlite --preset minimal --output ./rules.json")
+	fmt.Fprintln(w, "  marume testdata rules --rules rules/rules-2026.sqlite --preset minimal --output ./rules-minimal.sqlite")
 	fmt.Fprintln(w, "  marume testdata write --rules rules/rules-2026.sqlite --dir ./.local/marume-sample")
 }
 

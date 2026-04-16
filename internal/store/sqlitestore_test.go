@@ -1,17 +1,19 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/ochanuco/marume/internal/domain"
 	"github.com/ochanuco/marume/internal/store"
-	"github.com/ochanuco/marume/internal/testutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -71,7 +73,7 @@ func TestSQLiteRuleStoreは年度不一致で専用エラーを返す(t *testing
 func TestSQLiteRuleStoreは指定年度のruleSetを優先して読む(t *testing.T) {
 	sqlitePath := filepath.Join(t.TempDir(), "rules.sqlite")
 	ruleSet2026 := mustLoadRuleSetFixture(t, "rules-2026.json")
-	if err := testutil.WriteSQLiteRuleSet(sqlitePath, ruleSet2026); err != nil {
+	if err := store.WriteSQLiteRuleSet(sqlitePath, ruleSet2026); err != nil {
 		t.Fatalf("2026 fixture の作成に失敗しました: %v", err)
 	}
 
@@ -198,6 +200,57 @@ func TestNewRuleStoreはSQLite拡張子からSQLiteRuleStoreを選ぶ(t *testing
 	}
 }
 
+func TestNewRuleStoreはJSON拡張子を拒否する(t *testing.T) {
+	_, err := store.NewRuleStore("rules/rules-2026.json")
+	if err == nil {
+		t.Fatal("JSON 拡張子ではエラーを期待しましたが、エラーが返りませんでした")
+	}
+	if !strings.Contains(err.Error(), "unsupported rule snapshot extension") {
+		t.Fatalf("JSON 拡張子のエラーメッセージが想定と異なります: %v", err)
+	}
+	if !strings.Contains(err.Error(), "SQLite") {
+		t.Fatalf("JSON 拡張子のエラーメッセージは SQLite に触れることを期待しましたが、実際は: %v", err)
+	}
+}
+
+func TestWriteSQLiteRuleSetはJSON拡張子を拒否する(t *testing.T) {
+	err := store.WriteSQLiteRuleSet(filepath.Join(t.TempDir(), "rules.json"), domain.RuleSet{})
+	if err == nil {
+		t.Fatal("JSON 拡張子ではエラーを期待しましたが、エラーが返りませんでした")
+	}
+	if !strings.Contains(err.Error(), "unsupported rule snapshot extension") {
+		t.Fatalf("JSON 拡張子のエラーメッセージが想定と異なります: %v", err)
+	}
+}
+
+func TestWriteSQLiteRuleSetは既存ファイルを上書きできる(t *testing.T) {
+	sqlitePath := filepath.Join(t.TempDir(), "rules.sqlite")
+	firstRuleSet := mustLoadRuleSetFixture(t, "rules-2026.json")
+	if err := store.WriteSQLiteRuleSet(sqlitePath, firstRuleSet); err != nil {
+		t.Fatalf("初回の SQLite fixture 作成に失敗しました: %v", err)
+	}
+
+	secondRuleSet := mustLoadRuleSetFixture(t, "rules-2027.json")
+	if err := store.WriteSQLiteRuleSet(sqlitePath, secondRuleSet); err != nil {
+		t.Fatalf("上書きの SQLite fixture 作成に失敗しました: %v", err)
+	}
+
+	ruleStore, err := store.NewSQLiteRuleStore(sqlitePath)
+	if err != nil {
+		t.Fatalf("SQLiteRuleStore の作成に失敗しました: %v", err)
+	}
+	ruleSet, err := ruleStore.ReadRuleSet(context.Background())
+	if err != nil {
+		t.Fatalf("上書き後の SQLiteRuleStore 読み込みに失敗しました: %v", err)
+	}
+	if ruleSet.FiscalYear != secondRuleSet.FiscalYear {
+		t.Fatalf("上書き後 fiscal_year は %d を期待しましたが、実際は %d でした", secondRuleSet.FiscalYear, ruleSet.FiscalYear)
+	}
+	if ruleSet.RuleVersion != secondRuleSet.RuleVersion {
+		t.Fatalf("上書き後 rule_version は %q を期待しましたが、実際は %q でした", secondRuleSet.RuleVersion, ruleSet.RuleVersion)
+	}
+}
+
 func TestSQLiteRuleStoreは存在しないファイルをosErrNotExistで返す(t *testing.T) {
 	ruleStore, err := store.NewSQLiteRuleStore(filepath.Join(t.TempDir(), "missing.sqlite"))
 	if err != nil {
@@ -218,7 +271,7 @@ func writeSQLiteFixture(t *testing.T, fixtureName string) string {
 
 	sqlitePath := filepath.Join(t.TempDir(), "rules.sqlite")
 	ruleSet := mustLoadRuleSetFixture(t, fixtureName)
-	if err := testutil.WriteSQLiteRuleSet(sqlitePath, ruleSet); err != nil {
+	if err := store.WriteSQLiteRuleSet(sqlitePath, ruleSet); err != nil {
 		t.Fatalf("SQLite fixture の作成に失敗しました: %v", err)
 	}
 	return sqlitePath
@@ -233,9 +286,15 @@ func mustLoadRuleSetFixture(t *testing.T, fixtureName string) domain.RuleSet {
 	}
 
 	jsonPath := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "rules", fixtureName)
-	ruleSet, err := testutil.LoadRuleSetJSON(jsonPath)
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("JSON fixture の読込に失敗しました: %v", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var ruleSet domain.RuleSet
+	if err := decoder.Decode(&ruleSet); err != nil {
+		t.Fatalf("JSON fixture のパースに失敗しました: %v", err)
 	}
 	return ruleSet
 }
