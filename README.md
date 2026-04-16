@@ -2,7 +2,7 @@
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ochanuco/marume?utm_source=oss&utm_medium=github&utm_campaign=ochanuco%2Fmarume&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-`marume` は、診断群分類（DPC）ルールをローカルで評価する Go 製 CLI です。JSON ルールセットまたは SQLite スナップショットを読み込み、症例ごとの分類結果を返せます。
+`marume` は、診断群分類（DPC）ルールをローカルで評価する Go 製 CLI です。SQLite スナップショットを読み込み、症例ごとの分類結果を返せます。
 
 ## アプリケーション利用者向け
 

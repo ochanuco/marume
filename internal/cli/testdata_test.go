@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ochanuco/marume/internal/cli"
+	"github.com/ochanuco/marume/internal/store"
 )
 
 func TestTestdataCaseは症例サンプルJSONを返す(t *testing.T) {
@@ -105,7 +106,7 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join(outputDir, "case-ok.json"),
 		filepath.Join(outputDir, "cases-basic.jsonl"),
-		filepath.Join(outputDir, "rules-minimal.json"),
+		filepath.Join(outputDir, "rules-minimal.sqlite"),
 	} {
 		if _, statErr := os.Stat(path); statErr != nil {
 			t.Fatalf("生成ファイルが見つかりません: %s (%v)", path, statErr)
@@ -117,8 +118,8 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 	if files["batch"] != filepath.Join(outputDir, "cases-basic.jsonl") {
 		t.Fatalf("files.batch は %s を期待しましたが、実際は %v でした", filepath.Join(outputDir, "cases-basic.jsonl"), files["batch"])
 	}
-	if files["rules"] != filepath.Join(outputDir, "rules-minimal.json") {
-		t.Fatalf("files.rules は %s を期待しましたが、実際は %v でした", filepath.Join(outputDir, "rules-minimal.json"), files["rules"])
+	if files["rules"] != filepath.Join(outputDir, "rules-minimal.sqlite") {
+		t.Fatalf("files.rules は %s を期待しましたが、実際は %v でした", filepath.Join(outputDir, "rules-minimal.sqlite"), files["rules"])
 	}
 
 	caseData, readErr := os.ReadFile(filepath.Join(outputDir, "case-ok.json"))
@@ -133,21 +134,21 @@ func TestTestdataWriteはサンプル一式を書き出す(t *testing.T) {
 		t.Fatalf("case-ok.json の case_id は sample-ok を期待しましたが、実際は %v でした", caseContent["case_id"])
 	}
 
-	rulesData, readErr := os.ReadFile(filepath.Join(outputDir, "rules-minimal.json"))
-	if readErr != nil {
-		t.Fatalf("rules-minimal.json の読み込みに失敗しました: %v", readErr)
+	rulesSQLitePath := filepath.Join(outputDir, "rules-minimal.sqlite")
+	ruleStore, rulesErr := store.NewSQLiteRuleStore(rulesSQLitePath)
+	if rulesErr != nil {
+		t.Fatalf("rules-minimal.sqlite のストア作成に失敗しました: %v", rulesErr)
 	}
-	var rulesContent map[string]any
-	if decodeErr := json.Unmarshal(rulesData, &rulesContent); decodeErr != nil {
-		t.Fatalf("rules-minimal.json のJSONパースに失敗しました: %v", decodeErr)
+	ruleSet, rulesErr := ruleStore.ReadRuleSet(context.Background())
+	if rulesErr != nil {
+		t.Fatalf("rules-minimal.sqlite の読み込みに失敗しました: %v", rulesErr)
 	}
-	if rulesContent["rule_version"] != "2026.0.0-poc" {
-		t.Fatalf("rules-minimal.json の rule_version は 2026.0.0-poc を期待しましたが、実際は %v でした", rulesContent["rule_version"])
+	if ruleSet.RuleVersion != "2026.0.0-poc" {
+		t.Fatalf("rules-minimal.sqlite の rule_version は 2026.0.0-poc を期待しましたが、実際は %q でした", ruleSet.RuleVersion)
 	}
 	expectedRuleCount := 2
-	rulesList, ok := rulesContent["rules"].([]any)
-	if !ok || len(rulesList) != expectedRuleCount {
-		t.Fatalf("rules-minimal.json の rules は %d 件を期待しましたが、実際は %v でした", expectedRuleCount, rulesContent["rules"])
+	if len(ruleSet.Rules) != expectedRuleCount {
+		t.Fatalf("rules-minimal.sqlite の rules は %d 件を期待しましたが、実際は %d 件でした", expectedRuleCount, len(ruleSet.Rules))
 	}
 
 	batchFile, openErr := os.Open(filepath.Join(outputDir, "cases-basic.jsonl"))
@@ -201,5 +202,28 @@ func TestTestdataUnknownPresetは入力エラーを返す(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `case preset "missing" は未定義です`) {
 		t.Fatalf("未知の preset のエラーメッセージが想定と異なります: %v", err)
+	}
+}
+
+func TestTestdataRulesは非SQLite拡張子の出力を入力エラーにする(t *testing.T) {
+	rulesPath := sqliteRulesPath(t, "rules-2026.json")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := cli.Run(
+		context.Background(),
+		[]string{"testdata", "rules", "--rules", rulesPath, "--output", filepath.Join(t.TempDir(), "rules.json")},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if err == nil {
+		t.Fatal("非 SQLite 拡張子の出力では入力エラーを期待しましたが、エラーが返りませんでした")
+	}
+	if cli.ExitCode(err) != 1 {
+		t.Fatalf("非 SQLite 拡張子の終了コードは 1 を期待しましたが、実際は %d でした", cli.ExitCode(err))
+	}
+	if !strings.Contains(err.Error(), "--output は SQLite ファイルパスを指定してください") {
+		t.Fatalf("非 SQLite 拡張子のエラーメッセージが想定と異なります: %v", err)
 	}
 }

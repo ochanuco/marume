@@ -1,52 +1,34 @@
-package testutil
+package store
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/ochanuco/marume/internal/domain"
-	"github.com/ochanuco/marume/internal/store"
 	_ "modernc.org/sqlite"
 )
 
-// LoadRuleSetJSON reads a strict JSON rule fixture from disk.
-func LoadRuleSetJSON(path string) (domain.RuleSet, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return domain.RuleSet{}, fmt.Errorf("read rule fixture: %w", err)
-	}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	var ruleSet domain.RuleSet
-	if err := decoder.Decode(&ruleSet); err != nil {
-		return domain.RuleSet{}, fmt.Errorf("decode rule fixture: %w", err)
-	}
-	return ruleSet, nil
-}
-
-// WriteSQLiteRuleSetFromJSON reads a JSON rule fixture and writes an equivalent SQLite snapshot.
-func WriteSQLiteRuleSetFromJSON(jsonPath string, sqlitePath string) error {
-	ruleSet, err := LoadRuleSetJSON(jsonPath)
-	if err != nil {
+// WriteSQLiteRuleSet materializes a RuleSet into a SQLite snapshot on disk.
+// The resulting database matches the schema produced by the Python data pipeline
+// so it can be loaded by SQLiteRuleStore without further transformation.
+func WriteSQLiteRuleSet(path string, ruleSet domain.RuleSet) error {
+	if err := ValidateSQLiteSnapshotPath(path); err != nil {
 		return err
 	}
-	return WriteSQLiteRuleSet(sqlitePath, ruleSet)
-}
-
-// WriteSQLiteRuleSet materializes a RuleSet into a SQLite snapshot for tests.
-func WriteSQLiteRuleSet(path string, ruleSet domain.RuleSet) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create sqlite fixture dir: %w", err)
+		return fmt.Errorf("create sqlite snapshot dir: %w", err)
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove existing sqlite snapshot: %w", err)
 	}
 
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return fmt.Errorf("open sqlite fixture: %w", err)
+		return fmt.Errorf("open sqlite snapshot: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
@@ -96,7 +78,7 @@ CREATE TABLE metadata (
 );
 `
 	if _, err := db.Exec(schema); err != nil {
-		return fmt.Errorf("create sqlite fixture schema: %w", err)
+		return fmt.Errorf("create sqlite snapshot schema: %w", err)
 	}
 	return nil
 }
@@ -104,7 +86,7 @@ CREATE TABLE metadata (
 func insertRuleSet(db *sql.DB, ruleSet domain.RuleSet) error {
 	tx, err := db.Begin()
 	if err != nil {
-		return fmt.Errorf("begin sqlite fixture tx: %w", err)
+		return fmt.Errorf("begin sqlite snapshot tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -117,7 +99,7 @@ func insertRuleSet(db *sql.DB, ruleSet domain.RuleSet) error {
 		ruleSet.BuildID,
 		ruleSet.BuiltAt,
 	); err != nil {
-		return fmt.Errorf("insert sqlite fixture rule_set: %w", err)
+		return fmt.Errorf("insert sqlite snapshot rule_set: %w", err)
 	}
 
 	for _, rule := range ruleSet.Rules {
@@ -129,13 +111,13 @@ func insertRuleSet(db *sql.DB, ruleSet domain.RuleSet) error {
 			rule.DPCCode,
 			rule.DPCCode,
 		); err != nil {
-			return fmt.Errorf("insert sqlite fixture rule %s: %w", rule.ID, err)
+			return fmt.Errorf("insert sqlite snapshot rule %s: %w", rule.ID, err)
 		}
 
 		for idx, condition := range rule.Conditions {
 			conditionType, operator, valueText, valueNum, valueJSON, err := denormalizeCondition(condition)
 			if err != nil {
-				return fmt.Errorf("denormalize sqlite fixture condition %s[%d]: %w", rule.ID, idx, err)
+				return fmt.Errorf("denormalize sqlite snapshot condition %s[%d]: %w", rule.ID, idx, err)
 			}
 			if _, err := tx.Exec(
 				`INSERT INTO rule_conditions(condition_id, rule_id, condition_type, operator, value_text, value_num, value_json, negated) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -147,16 +129,16 @@ func insertRuleSet(db *sql.DB, ruleSet domain.RuleSet) error {
 				valueNum,
 				valueJSON,
 			); err != nil {
-				return fmt.Errorf("insert sqlite fixture condition %s[%d]: %w", rule.ID, idx, err)
+				return fmt.Errorf("insert sqlite snapshot condition %s[%d]: %w", rule.ID, idx, err)
 			}
 		}
 	}
 
 	if _, err := tx.Exec(`INSERT INTO metadata(key, value) VALUES (?, ?)`, "rule_count", fmt.Sprintf("%d", len(ruleSet.Rules))); err != nil {
-		return fmt.Errorf("insert sqlite fixture metadata: %w", err)
+		return fmt.Errorf("insert sqlite snapshot metadata: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit sqlite fixture tx: %w", err)
+		return fmt.Errorf("commit sqlite snapshot tx: %w", err)
 	}
 	return nil
 }
@@ -167,44 +149,44 @@ func denormalizeCondition(condition domain.Condition) (string, string, any, any,
 		if len(condition.Values) != 1 {
 			return "", "", nil, nil, nil, fmt.Errorf("%s requires a single value", condition.Type)
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
 	case "procedures":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode procedure values: %w", err)
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "diagnoses":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode diagnosis values: %w", err)
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "comorbidities":
 		valueJSON, err := json.Marshal(condition.Values)
 		if err != nil {
 			return "", "", nil, nil, nil, fmt.Errorf("encode comorbidity values: %w", err)
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 	case "age":
 		if condition.IntValue == nil {
 			return "", "", nil, nil, nil, fmt.Errorf("age requires int_value")
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
 	default:
 		if len(condition.Values) == 1 {
-			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
+			return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), condition.Values[0], nil, nil, nil
 		}
 		if len(condition.Values) > 1 {
 			valueJSON, err := json.Marshal(condition.Values)
 			if err != nil {
 				return "", "", nil, nil, nil, fmt.Errorf("encode fallback values: %w", err)
 			}
-			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
+			return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, string(valueJSON), nil
 		}
 		if condition.IntValue != nil {
-			return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
+			return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, *condition.IntValue, nil, nil
 		}
-		return store.SQLiteConditionTypeFromDomain(condition.Type), store.SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, nil, nil
+		return SQLiteConditionTypeFromDomain(condition.Type), SQLiteConditionOperatorFromDomain(condition.Operator), nil, nil, nil, nil
 	}
 }
