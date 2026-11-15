@@ -1,6 +1,6 @@
 [tools]
-go = "1.26.1"
-uv = "0.11.2"
+go = "1.27.3"
+uv = "0.13.7"
 
 [tasks."go:build"]
 description = "workspace-local の Go キャッシュを使って marume CLI をビルド"
